@@ -1,0 +1,513 @@
+---
+title: "Create-Latex-Table"
+output: html_document
+date: "2025-08-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, warning=FALSE, message=FALSE}
+# Set locale to English
+Sys.setlocale("LC_ALL", "en_US.UTF-8")
+
+#!/usr/bin/env Rscript
+library(ggplot2)
+library(boot)
+library(readr)
+library(tidyr)
+library(dplyr)
+library(purrr)
+library(gridExtra)
+library(lme4)
+library(lmerTest)
+library(glmmTMB)
+library(MASS)
+library(brms)
+library(mirt)
+library(gtable)
+library(cowplot)
+library(grid)
+library(ggdist)
+library(RColorBrewer)
+library(colorspace)
+```
+
+
+```{r Read csv for behav models, warning=FALSE}
+cor_study2 <- read_csv("../results/stats/behavior_cor_spillover_skip_regress_bayesian_scaled.csv")
+spec(cor_study2)
+```
+
+```{r Orders & labels}
+# --- Orders & labels --------------------------------------------------------
+effect_order   <- c("Word Length", "Lexical Frequency", "Surprisal")
+measure_order  <- c("Skip Rate", "Regression Rate", "Local Effect")
+mode_order     <- c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")
+contrast_order <- c("c1", "c2")
+```
+
+
+```{r Create correlation table cor_behav}
+
+# --- Flags & formatters -----------------------------------------------------
+cor_study2 <- cor_study2 %>%
+  mutate(bold = (rho_lower > 0 & rho_upper > 0) | (rho_lower < 0 & rho_upper < 0))
+
+fmt_mean <- function(x) sprintf("%.2f", x)
+fmt_ci   <- function(lo, hi) sprintf("[%.2f, %.2f]", lo, hi)
+
+contrast_label <- function(mode, contrast) {
+  switch(mode,
+    "InDiCo"  = if (contrast == "c1") "session 1" else "session 2",
+    "PoTeC"   = if (contrast == "c1") "In"        else "Out",
+    "OneStop" = if (contrast == "c1") "repeated"  else "normal",
+    "GECO-NL" = if (contrast == "c1") "L1"        else "L2",
+    "GECO-ZH" = if (contrast == "c1") "L1"        else "L2",
+    "HKC"     = if (contrast == "c1") "Paragraph" else "Sentence",
+    contrast
+  )
+}
+
+# return mean or CI; bold both if both CI bounds share sign
+get_cell <- function(mode, contrast, effect, measure, part = c("mean","ci")) {
+  part <- match.arg(part)
+  row <- cor_study2 %>%
+    filter(mode == !!mode, Contrast == !!contrast,
+           effect == !!effect, measures == !!measure)
+  if (nrow(row) == 0) return("--")
+  mean_txt <- fmt_mean(row$rho_mean)
+  ci_txt   <- fmt_ci(row$rho_lower, row$rho_upper)
+  if (row$bold) {
+    mean_txt <- paste0("\\textbf{", mean_txt, "}")
+    ci_txt   <- paste0("\\textbf{", ci_txt, "}")
+  }
+  if (part == "mean") mean_txt else ci_txt
+}
+
+# --- Build LaTeX lines ------------------------------------------------------
+row_strut <- "\\rule{0pt}{2.2ex}"  # extra height
+
+lines <- c(
+  "\\begin{table}[ht]",
+  "\\centering",
+  "{\\scriptsize",
+  "\\setlength{\\tabcolsep}{2.2pt}",
+  "\\renewcommand{\\arraystretch}{1.22}",
+  "\\resizebox{\\textwidth}{!}{%",
+  "\\begin{tabular}{@{}>{\\centering\\arraybackslash}m{0.9cm}@{}c ccccccccc@{}}",
+  "\\toprule",
+  # "% \\midrule",
+  # Header row 1
+  "\\multicolumn{2}{>{\\centering\\arraybackslash}m{2.6cm}}{\\large\\textbf{Correlation b/w}} & ",
+  "\\multicolumn{3}{c}{\\textbf{Word Length Spillover}} & ",
+  "\\multicolumn{3}{c}{\\textbf{Lexical Frequency Spillover}} & ",
+  "\\multicolumn{3}{c}{\\textbf{Surprisal Spillover}} \\\\",
+  "\\cmidrule(lr){3-5}\\cmidrule(lr){6-8}\\cmidrule(lr){9-11}",
+  # Header row 2
+  "\\multicolumn{2}{c}{} & ",
+  paste0("\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.} & ",
+         "\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.} & ",
+         "\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.}"),
+  " \\\\",
+  "\\midrule",
+  "\\rowcolors{3}{gray!08}{white}"
+)
+
+# Data rows
+for (mode in mode_order) {
+  for (j in seq_along(contrast_order)) {
+    # print(j)
+    contrast <- contrast_order[j]
+    label <- contrast_label(mode, contrast)
+
+    # row 1 (means)
+    row1 <- c()
+    if (j == 1) {
+      row1 <- c(row1, paste0("\\multirow{4}{*}{\\centering\\rotatebox[origin=c]{90}{\\textbf{", mode, "}}}"))
+    } else {
+      row1 <- c(row1, "")
+    }
+    row1 <- c(row1, paste0("\\multirow{2}{*}{\\textbf{", label, "}}"))
+    first <- TRUE
+    for (eff in effect_order) {
+      for (meas in measure_order) {
+        v <- get_cell(mode, contrast, eff, meas, "mean")
+        if (first) { v <- paste0(row_strut, " ", v); first <- FALSE }
+        row1 <- c(row1, v)
+      }
+    }
+    lines <- c(lines, paste(row1, collapse = " & "), "\\\\")
+
+    # row 2 (CI)
+    row2 <- c("", "")
+    first2 <- TRUE
+    for (eff in effect_order) {
+      for (meas in measure_order) {
+        v2 <- get_cell(mode, contrast, eff, meas, "ci")
+        if (first2) { v2 <- paste0(row_strut, " ", v2); first2 <- FALSE }
+        row2 <- c(row2, v2)
+      }
+    }
+    lines <- c(lines, paste(row2, collapse = " & "), "\\\\")
+    if (j < length(contrast_order)) {
+      print("add space")
+  lines <- c(lines, "\\addlinespace[6pt]")
+}
+  }
+  lines <- c(lines, "% \\midrule")
+}
+
+lines <- c(
+  lines,
+  "\\bottomrule",
+  "\\end{tabular}",
+  "}% end resizebox",
+  "}% end normalsize",
+  "\\caption{Top row per contrast shows $\\rho$; the row beneath shows $[\\text{lower},\\,\\text{upper}]$.}",
+  "\\label{cor_behav_meas}",
+  "\\end{table}"
+)
+
+# --- Write LaTeX to file ----------------------------------------------------
+writeLines(lines, "../results/latex/cor_behav_meas2.tex")
+
+```
+
+```{r Read csv for pop effect, warning=FALSE}
+pred_order  <- c("Word Len.","Lex. Freq.","Surprisal")
+loc_order   <- c("Local","Spillover")
+
+fmt <- function(m, lo, up) {
+  same_sign <- (lo > 0 & up > 0) | (lo < 0 & up < 0)
+  ifelse(
+    same_sign,
+    sprintf("\\sigestci{%.2f}{%.2f}{%.2f}", m, lo, up),
+    sprintf("\\nonsigestci{%.2f}{%.2f}{%.2f}", m, lo, up)
+  )
+}
+
+# Read and prepare (as in your pipeline, but keep 'mode' for rows)
+fixtab<- read_csv("../results/stats/fixed_effect_summary.csv", show_col_types = FALSE) %>%
+  filter(predictor != "Contrast") %>%
+  mutate(
+    predictor = factor(predictor, levels = pred_order),
+    location  = factor(location,  levels = loc_order),
+    cell      = fmt(mean_eff, lower, upper)
+  )
+fixtab
+```
+
+```{r Create table for pop effect}
+get_cell_fixed <- function(mode, pred, loc){ 
+  sub <- fixtab %>% 
+    filter(mode == !!mode, predictor == !!pred, location == !!loc) 
+  sub$cell[1] }
+
+# print(get_cell_fixed("PoTeC", "Lex. Freq.", "Local"))
+# print(get_cell_fixed("InDiCo", "Word Len.", "Spillover"))
+
+top_header_cells <- vapply(pred_order, function(p) {
+  sprintf("\\multicolumn{2}{c}{\\textbf{%s}}", p)
+}, character(1))
+# print(top_header_cells)
+sub_header_cells <- rep(loc_order, times = length(pred_order))
+# print(sub_header_cells)
+
+header_row1 <- paste(
+  "\\multirow{2}{*}{\\shortstack[c]{\\textbf{Pop. Effect}\\\\\\textbf{(log-ms)}}} &",
+  paste(top_header_cells, collapse = " & "),
+  "\\\\"
+)
+
+# Row 2: (first cell omitted; occupied by the multirow)
+header_row2 <- paste(
+  "&",
+  paste(sprintf("\\textbf{%s}", sub_header_cells), collapse = " & "),
+  "\\\\"
+)
+
+
+
+# cmidrule ranges for each predictor group (start at column 2 because col 1 = Mode)
+cmid_rules <- {
+  starts <- 2 + 2 * (0:(length(pred_order)-1))
+  ends   <- starts + 1
+  paste0("\\cmidrule(lr){", starts, "-", ends, "}", collapse = "")
+}
+
+# --- Build LaTeX lines ---
+row_strut <- "\\rule{0pt}{2.2ex}"
+
+lines <- c(
+  "\\begin{table}[ht]",
+  "\\centering",
+  "{\\scriptsize",
+  "\\setlength{\\tabcolsep}{2.5pt}",
+  "\\renewcommand{\\arraystretch}{1.22}",
+  "\\resizebox{\\textwidth}{!}{%",
+  # 1 column for Mode + 6 data columns (3 predictors × 2 locations)
+  "\\begin{tabular}{@{}lcccccc@{}}",
+  "\\toprule",
+  header_row1,
+  cmid_rules,
+  header_row2,
+  "\\midrule"
+)
+
+# --- Data rows (modes) ---
+col_keys <- do.call(rbind, lapply(pred_order, function(p) {
+  data.frame(predictor = p, location = loc_order, stringsAsFactors = FALSE)
+}))
+# col_keys
+
+for (mode in mode_order) {
+  cells <- vapply(seq_len(nrow(col_keys)), function(i) {
+    get_cell_fixed(mode, col_keys$predictor[i], col_keys$location[i])
+  }, character(1))
+  cells[1] <- paste0(row_strut, " ", cells[1])  # slight height
+  lines <- c(lines, paste(c(mode, cells), collapse = " & "), "\\\\")
+}
+
+lines <- c(
+  lines,
+  "\\bottomrule",
+  "\\end{tabular}",
+  "}% end resizebox",
+  "}% end normalsize",
+  "\\caption{Population level effect summaries by predictor (Local vs. Spillover). }",
+  "\\label{tab:pop_effects}",
+  "\\end{table}"
+)
+
+# --- Write & print ---
+out_path <- "../results/latex/pop_eff.tex"
+dir.create(dirname(out_path), showWarnings = FALSE, recursive = TRUE)
+writeLines(lines, out_path)
+message("Wrote: ", out_path)
+
+# cat(paste(lines, collapse = "\n"))
+```
+
+```{r}
+rb <- read_csv("../results/stats/spillover_measurement_reliability.csv", show_col_types = FALSE) %>%
+  # filter(location == "spillover") %>%
+  pivot_longer(
+    cols = c(cor_len, cor_freq, cor_surp),
+    names_to = "predictor",
+    values_to = "eff_size"
+  ) %>%
+  mutate(predictor = recode(predictor,
+                            cor_len  = "Word Len.",
+                            cor_freq = "Lex. Freq.",
+                            cor_surp = "Surprisal")) %>%
+  mutate(location = factor(location, levels = c("local", "spillover"), labels = c("Local", "Spillover")),
+    predictor = factor(predictor, levels = c("Word Len.", "Lex. Freq.", "Surprisal")),
+         mode = factor(mode,
+                        levels = c("indicos", "potec", "onestop", "geconl", "gecozh", "hkc"),
+                        labels = c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC"))
+         ) %>%
+  group_by(location, mode, predictor) %>%
+  summarise(
+    mean_eff = mean(eff_size),
+    # lower    = quantile(eff_size, 0.025),
+    # upper    = quantile(eff_size, 0.975),
+    lower = hdi(eff_size, credMass = 0.95)[1],
+    upper = hdi(eff_size, credMass = 0.95)[2],
+    .groups  = "drop"
+  )
+
+View(rb)
+```
+
+```{r}
+rb_tab <- rb %>%
+  mutate(cell = fmt(mean_eff, lower, upper)) %>%
+  dplyr::select(location, predictor, mode, cell) #%>%
+  # pivot_wider(names_from = mode, values_from = cell) %>%
+  # arrange(predictor)
+View(rb_tab)
+```
+
+```{r}
+get_cell_fixed <- function(mod, pred, loc){
+  sub <- rb_tab %>%
+    dplyr::filter(mode == !!mod, predictor == !!pred, location == !!loc)
+  if (nrow(sub) != 1) stop(sprintf("Missing/duplicate cell for (%s, %s, %s)", mod, pred, loc))
+  sub$cell[1]
+}
+
+# --- Header pieces ----------------------------------------------------------
+# header_row1 <- paste(
+#   "\\multirow{2}{*}{\\textbf{Reliability}} &",
+#   paste(top_header_cells, collapse = " & "),
+#   "\\\\"
+# )
+header_row1 <- paste(
+  "\\multirow{2}{*}{\\shortstack[c]{\\textbf{Reliability}\\\\({\\boldmath$\\hat{r}$})}} &",
+  paste(top_header_cells, collapse = " & "),
+  "\\\\"
+)
+
+# Second header row: NO first cell (it's occupied by the multirow above)
+header_row2 <- paste(
+  "&",
+  paste(sprintf("\\textbf{%s}", sub_header_cells), collapse = " & "),
+  "\\\\"
+)
+
+top_header_cells <- vapply(pred_order, function(p) {
+  sprintf("\\multicolumn{2}{c}{\\textbf{%s}}", p)
+}, character(1))
+
+sub_header_cells <- rep(loc_order, times = length(pred_order))
+
+cmid_rules <- {
+  starts <- 2 + 2 * (0:(length(pred_order)-1))
+  ends   <- starts + 1
+  paste0("\\cmidrule(lr){", starts, "-", ends, "}", collapse = "")
+}
+
+# --- Build LaTeX ------------------------------------------------------------
+row_strut <- "\\rule{0pt}{2.2ex}"
+
+lines <- c(
+  "\\begin{table}[ht]",
+  "\\centering",
+  "{\\scriptsize",
+  "\\setlength{\\tabcolsep}{2.5pt}",
+  "\\renewcommand{\\arraystretch}{1.22}",
+  "\\resizebox{\\textwidth}{!}{%",
+  "\\begin{tabular}{@{}lcccccc@{}}",  # 1 col for Mode + 3*2 subcols
+  "\\toprule",
+  header_row1,
+  cmid_rules,
+  header_row2,
+  "\\midrule"
+)
+
+# Interleaved column keys: for each predictor -> Local, Spillover
+col_keys <- do.call(rbind, lapply(pred_order, function(p) {
+  data.frame(predictor = p, location = loc_order, stringsAsFactors = FALSE)
+}))
+# print(col_keys)
+
+# --- Data rows (modes) ------------------------------------------------------
+for (mod in mode_order) {
+  # print(mod)
+  cells <- vapply(seq_len(nrow(col_keys)), function(i) {
+    get_cell_fixed(mod, col_keys$predictor[i], col_keys$location[i])
+  }, character(1))
+  cells[1] <- paste0(row_strut, " ", cells[1])  # slight height on first data cell
+  lines <- c(lines, paste(c(mod, cells), collapse = " & "), "\\\\")
+}
+
+# --- Close table ------------------------------------------------------------
+lines <- c(
+  lines,
+  "\\bottomrule",
+  "\\end{tabular}",
+  "}% end resizebox",
+  "}% end scriptsize",
+  "\\caption{Overall reliability estimates.}",
+  "\\label{tab:overall_rel}",
+  "\\end{table}"
+)
+
+# --- Write & print ----------------------------------------------------------
+out_path <- "../results/latex/overall_reliability.tex"
+dir.create(dirname(out_path), recursive = TRUE, showWarnings = FALSE)
+writeLines(lines, out_path)
+cat(paste(lines, collapse = "\n"))
+```
+
+```{r Psychometric_profile table}
+m <- read_rds("../models/psycho-profile/indico_profile_log_gaze_duration.rds")
+
+# 1) grab fixed effects and keep only what's needed (rounded to 3 decimals)
+f <- brms::fixef(m, probs = c(0.025, 0.975))
+f_df <- data.frame(
+  term     = rownames(f),
+  Estimate = round(f[, "Estimate"], 3),
+  l95      = round(f[, "Q2.5"],     3),
+  u95      = round(f[, "Q97.5"],    3),
+  row.names = NULL,
+  check.names = FALSE
+)
+
+# 2) formatting function (uses your macros)
+fmt <- function(m, lo, up) {
+  same_sign <- (lo > 0 & up > 0) | (lo < 0 & up < 0)
+  ifelse(
+    same_sign,
+    sprintf("\\sigestci{%.3f}{%.3f}{%.3f}", m, lo, up),
+    sprintf("\\nonsigestci{%.3f}{%.3f}{%.3f}", m, lo, up)
+  )
+}
+
+# 3) helper to fetch an interaction regardless of order "a:b" vs "b:a"
+get_cell_interaction <- function(a, b) {
+  t1 <- paste0(a, ":", b)
+  t2 <- paste0(b, ":", a)
+  row <- f_df[f_df$term == t1 | f_df$term == t2, , drop = FALSE]
+  if (nrow(row) != 1) stop("Missing/duplicate interaction term: ", a, ":", b)
+  fmt(row$Estimate, row$l95, row$u95)
+}
+
+# 4) table layout (row and column labels)
+row_labels <- c("Previous Word Len.", "Previous Lex. Freq.", "Previous Surprisal")
+col_headers <- c("Interaction b/w", "Reading Fluency", "Working Memory",
+                 "Intelligence", "Cognitive Control")
+
+# interactions in the required order for each row
+row_terms <- list(
+  list(c("prev_len","reading"),      c("prev_len","memory"),
+       c("prev_len","intelligence"), c("prev_len","cogcontr")),
+  list(c("prev_freq","reading"),      c("prev_freq","memory"),
+       c("prev_freq","intelligence"), c("prev_freq","cogcontr")),
+  list(c("prev_surp","reading"),      c("prev_surp","memory"),
+       c("prev_surp","intelligence"), c("prev_surp","cogcontr"))
+)
+
+# 5) build LaTeX lines (simple booktabs table)
+lines <- c(
+  "\\begin{table}[ht]",
+  "\\centering",
+  "{\\scriptsize",
+  "\\setlength{\\tabcolsep}{6pt}",
+  "\\renewcommand{\\arraystretch}{1.2}",
+  "\\resizebox{\\textwidth}{!}{%",
+  "\\begin{tabular}{lcccc}",
+  "\\toprule",
+  paste0("\\textbf{", paste(col_headers, collapse = "} & \\textbf{"), "} \\\\"),
+  "\\midrule"
+)
+
+for (i in seq_along(row_labels)) {
+  cells <- vapply(row_terms[[i]], function(pair) {
+    get_cell_interaction(pair[1], pair[2])
+  }, character(1))
+  lines <- c(lines, paste(c(row_labels[i], cells), collapse = " & "), " \\\\")
+}
+
+lines <- c(
+  lines,
+  "\\bottomrule",
+  "\\end{tabular}",
+  "}% end resizebox",
+  "}% end scriptsize",
+  "\\caption{Interaction coefficients}",
+  "\\label{tab:psych_spillvoer_interaction}",
+  "\\end{table}"
+)
+
+# 6) write to file (and also print to console)
+out_path <- "../results/latex/psych_interaction_table.tex"
+dir.create(dirname(out_path), recursive = TRUE, showWarnings = FALSE)
+writeLines(lines, out_path)
+cat(paste(lines, collapse = "\n"))
+
+
+```
+

@@ -1,0 +1,37 @@
+mode,measure,location,effect,mean,crI_lower,crI_upper,annotation,x_pos,y_pos,hjust_val,vjust_val
+GECO-NL,gaze_duration,Local,Word Length,0.4358308842578238,0.1008424784586623,0.7077235798686308,"hat(rho) == 0.44*""[""*0.10*"","" ~ 0.71*""]""",Inf,-Inf,1.05,-0.1
+GECO-NL,gaze_duration,Local,Lexical Frequency,0.3252422282901923,-0.02597112544244545,0.626839741047048,"hat(rho) == 0.33*""[""*-0.03*"","" ~ 0.63*""]""",Inf,-Inf,1.05,-0.1
+GECO-NL,gaze_duration,Local,Surprisal,0.11490116558215724,-0.23284447887910092,0.4424730005558065,"hat(rho) == 0.11*""[""*-0.23*"","" ~ 0.44*""]""",Inf,-Inf,1.05,-0.1
+GECO-NL,gaze_duration,Spillover,Word Length,0.5185819895888351,0.19717506666693269,0.769105962920021,"hat(rho) == 0.52*""[""*0.20*"","" ~ 0.77*""]""",Inf,-Inf,1.05,-0.1
+GECO-NL,gaze_duration,Spillover,Lexical Frequency,0.1332539035976645,-0.2265119466931206,0.4927946236768715,"hat(rho) == 0.13*""[""*-0.23*"","" ~ 0.49*""]""",Inf,-Inf,1.05,-0.1
+GECO-NL,gaze_duration,Spillover,Surprisal,-0.008915460664065117,-0.403733408952569,0.3973446405019311,"hat(rho) == -0.01*""[""*-0.40*"","" ~ 0.40*""]""",Inf,-Inf,1.05,-0.1
+GECO-ZH,gaze_duration,Local,Word Length,-0.29440703047375927,-0.5785209668077125,0.0868781329600067,"hat(rho) == -0.29*""[""*-0.58*"","" ~ 0.09*""]""",Inf,-Inf,1.05,-0.1
+GECO-ZH,gaze_duration,Local,Lexical Frequency,0.26091678005709135,-0.13253676889130203,0.6109028281854149,"hat(rho) == 0.26*""[""*-0.13*"","" ~ 0.61*""]""",Inf,-Inf,1.05,-0.1
+GECO-ZH,gaze_duration,Local,Surprisal,0.11503652876522225,-0.21192833589799434,0.43688154054770595,"hat(rho) == 0.12*""[""*-0.21*"","" ~ 0.44*""]""",Inf,-Inf,1.05,-0.1
+GECO-ZH,gaze_duration,Spillover,Word Length,0.008016246010840783,-0.30548502916197895,0.3462618152025217,"hat(rho) == 0.01*""[""*-0.31*"","" ~ 0.35*""]""",Inf,-Inf,1.05,-0.1
+GECO-ZH,gaze_duration,Spillover,Lexical Frequency,-0.2348257955958608,-0.5413941233412372,0.13348981956808798,"hat(rho) == -0.23*""[""*-0.54*"","" ~ 0.13*""]""",Inf,-Inf,1.05,-0.1
+GECO-ZH,gaze_duration,Spillover,Surprisal,0.022634581992470558,-0.32015724578445426,0.3744160318636992,"hat(rho) == 0.02*""[""*-0.32*"","" ~ 0.37*""]""",Inf,-Inf,1.05,-0.1
+HKC,gaze_duration,Local,Word Length,0.39299361905,0.12264405,0.627002625,"hat(rho) == 0.39*""[""*0.12*"","" ~ 0.63*""]""",Inf,-Inf,1.05,-0.1
+HKC,gaze_duration,Local,Lexical Frequency,-0.1477578243696,-0.5967358,0.37543322500000004,"hat(rho) == -0.15*""[""*-0.60*"","" ~ 0.38*""]""",Inf,-Inf,1.05,-0.1
+HKC,gaze_duration,Local,Surprisal,0.08758362338279999,-0.43203179999999997,0.5813871250000001,"hat(rho) == 0.09*""[""*-0.43*"","" ~ 0.58*""]""",Inf,-Inf,1.05,-0.1
+HKC,gaze_duration,Spillover,Word Length,0.01707628501175,-0.48326055,0.49334282500000004,"hat(rho) == 0.02*""[""*-0.48*"","" ~ 0.49*""]""",Inf,-Inf,1.05,-0.1
+HKC,gaze_duration,Spillover,Lexical Frequency,0.3592871706625,-0.0467575525,0.681866075,"hat(rho) == 0.36*""[""*-0.05*"","" ~ 0.68*""]""",Inf,-Inf,1.05,-0.1
+HKC,gaze_duration,Spillover,Surprisal,0.2559349320575,-0.07337729750000001,0.5651782999999999,"hat(rho) == 0.26*""[""*-0.07*"","" ~ 0.57*""]""",Inf,-Inf,1.05,-0.1
+InDiCo,gaze_duration,Local,Word Length,0.7034445703076966,0.5436785529520399,0.8237373012272526,"hat(rho) == 0.70*""[""*0.54*"","" ~ 0.82*""]""",Inf,-Inf,1.05,-0.1
+InDiCo,gaze_duration,Local,Lexical Frequency,0.5563847001413231,0.2529177619580429,0.8112077853632432,"hat(rho) == 0.56*""[""*0.25*"","" ~ 0.81*""]""",Inf,-Inf,1.05,-0.1
+InDiCo,gaze_duration,Local,Surprisal,0.06890616258629265,-0.4339998526405521,0.5399746196375823,"hat(rho) == 0.07*""[""*-0.43*"","" ~ 0.54*""]""",Inf,-Inf,1.05,-0.1
+InDiCo,gaze_duration,Spillover,Word Length,0.490181006093319,0.23572356869920413,0.7010906503765594,"hat(rho) == 0.49*""[""*0.24*"","" ~ 0.70*""]""",Inf,-Inf,1.05,-0.1
+InDiCo,gaze_duration,Spillover,Lexical Frequency,0.30225110559675117,-0.0755101835251065,0.6430792670405304,"hat(rho) == 0.30*""[""*-0.08*"","" ~ 0.64*""]""",Inf,-Inf,1.05,-0.1
+InDiCo,gaze_duration,Spillover,Surprisal,0.06997232541337639,-0.4284195399723353,0.5320963196854708,"hat(rho) == 0.07*""[""*-0.43*"","" ~ 0.53*""]""",Inf,-Inf,1.05,-0.1
+OneStop,gaze_duration,Local,Word Length,0.72142809225,0.54570535,0.863056425,"hat(rho) == 0.72*""[""*0.55*"","" ~ 0.86*""]""",Inf,-Inf,1.05,-0.1
+OneStop,gaze_duration,Local,Lexical Frequency,0.36524487325275,-4.2513972499999276e-4,0.6803392500000001,"hat(rho) == 0.37*""[""*-0.00*"","" ~ 0.68*""]""",Inf,-Inf,1.05,-0.1
+OneStop,gaze_duration,Local,Surprisal,0.31744026594155,-0.13932432499999997,0.6678925250000001,"hat(rho) == 0.32*""[""*-0.14*"","" ~ 0.67*""]""",Inf,-Inf,1.05,-0.1
+OneStop,gaze_duration,Spillover,Word Length,0.42050535092175,0.08888544500000001,0.70165105,"hat(rho) == 0.42*""[""*0.09*"","" ~ 0.70*""]""",Inf,-Inf,1.05,-0.1
+OneStop,gaze_duration,Spillover,Lexical Frequency,0.169759148349075,-0.35160670000000005,0.6015589000000001,"hat(rho) == 0.17*""[""*-0.35*"","" ~ 0.60*""]""",Inf,-Inf,1.05,-0.1
+OneStop,gaze_duration,Spillover,Surprisal,0.109939225676,-0.39173964999999994,0.559043775,"hat(rho) == 0.11*""[""*-0.39*"","" ~ 0.56*""]""",Inf,-Inf,1.05,-0.1
+PoTeC,gaze_duration,Local,Word Length,0.6527292877499999,0.4059837,0.8402127500000001,"hat(rho) == 0.65*""[""*0.41*"","" ~ 0.84*""]""",Inf,-Inf,1.05,-0.1
+PoTeC,gaze_duration,Local,Lexical Frequency,0.128392137639675,-0.169087775,0.412144575,"hat(rho) == 0.13*""[""*-0.17*"","" ~ 0.41*""]""",Inf,-Inf,1.05,-0.1
+PoTeC,gaze_duration,Local,Surprisal,-0.086704561725975,-0.506063675,0.3514856,"hat(rho) == -0.09*""[""*-0.51*"","" ~ 0.35*""]""",Inf,-Inf,1.05,-0.1
+PoTeC,gaze_duration,Spillover,Word Length,0.361835319235,-0.04488749749999999,0.678849625,"hat(rho) == 0.36*""[""*-0.04*"","" ~ 0.68*""]""",Inf,-Inf,1.05,-0.1
+PoTeC,gaze_duration,Spillover,Lexical Frequency,0.4413463960505,0.081625555,0.7356114,"hat(rho) == 0.44*""[""*0.08*"","" ~ 0.74*""]""",Inf,-Inf,1.05,-0.1
+PoTeC,gaze_duration,Spillover,Surprisal,0.027348345579999996,-0.448317175,0.4939657750000001,"hat(rho) == 0.03*""[""*-0.45*"","" ~ 0.49*""]""",Inf,-Inf,1.05,-0.1

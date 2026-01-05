@@ -1,0 +1,368 @@
+---
+title: "Simple data inspection"
+output: html_notebook
+---
+
+```{r}
+# Set locale to English
+Sys.setlocale("LC_ALL", "en_US.UTF-8")
+#!/usr/bin/env Rscript
+library(ggplot2)
+library(ggdist)
+library(boot)
+library(readr)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(purrr)
+library(gridExtra)
+library(lme4)
+library(lmerTest)
+library(glmmTMB)
+library(MASS)
+library(mirt)
+library(gtable)
+library(cowplot)
+library(grid)
+library(RColorBrewer)
+library(colorspace)
+library(scales)
+```
+
+```{r}
+measures_col <- c("gaze_duration", "total_duration", "FPReg", "skip")
+
+hkc_sent <- read.csv("../data/hkc/hkc_sent.csv", header = TRUE) %>% 
+  dplyr::select(PP_ID, TRIAL_INDEX, para_or_sent_id, IA_ID, IA_LABEL, Format, all_of(measures_col), word_len_punct, zipf_freq, surp) %>% 
+  rename(subj = PP_ID,  trial = TRIAL_INDEX, text = para_or_sent_id, word_id = IA_ID, word = IA_LABEL, format=Format, len = word_len_punct, freq = zipf_freq) %>% 
+  mutate(
+    subj_id = as.integer(factor(subj)),
+    trial = as.integer(trial),
+    text = as.integer(text),
+    word_id = as.integer(word_id)
+  ) %>%
+  mutate(across(all_of(measures_col), ~ as.numeric(ifelse(. == ".", "0", .)))) %>%
+  mutate(across(all_of(measures_col), ~ as.numeric(.))) %>%
+  group_by(subj_id, trial, text) %>%
+  arrange(word_id, .by_group = TRUE) %>%
+  mutate(
+    prev_len = lag(len),
+    prev_freq = lag(freq),
+    prev_surp = lag(surp)
+  ) %>%
+  ungroup() %>%
+  filter(freq > 0, prev_freq > 0, surp > 0, prev_surp > 0) %>%
+  # mutate(
+  #   len = as.numeric(scale(len)),
+  #   freq = as.numeric(scale(freq)),
+  #   surp = as.numeric(scale(surp)),
+  #   prev_len = as.numeric(scale(prev_len)),
+  #   prev_freq = as.numeric(scale(prev_freq)),
+  #   prev_surp = as.numeric(scale(prev_surp))
+  # ) %>%
+  mutate(
+    subj = paste0("s", subj),
+    text = paste0("t", text)
+  ) %>% 
+  filter(total_duration != 0) %>% 
+  pivot_longer(cols = all_of(measures_col), names_to = "measures", values_to = "value") %>%
+  group_by(measures) %>%
+  mutate(
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE)
+  ) %>%
+  filter((measures %in% c("FPReg", "skip")) | value <= (mean + 5 * sd)) %>%
+  ungroup() %>%
+  dplyr::select(-mean, -sd)
+
+hkc_para <- read.csv("../data/hkc/hkc_para.csv", header = TRUE) %>% 
+  separate(WORD_ID, into = c("w1", "trial", "w3"), sep = "-", remove = FALSE) %>%
+  mutate(trial = as.integer(trial)) %>%
+  dplyr::select(PP_ID, trial, para_or_sent_id, IA_ID, IA_LABEL, FORMAT, all_of(measures_col), word_len_punct, zipf_freq, surp) %>% 
+  rename(subj = PP_ID, text=para_or_sent_id, word_id = IA_ID, word = IA_LABEL, format=FORMAT, len = word_len_punct, freq = zipf_freq) %>% 
+  mutate(
+    subj_id = as.integer(factor(subj)),
+    trial = as.integer(trial),
+    text = as.integer(text),
+    word_id = as.integer(word_id)
+  ) %>%
+  mutate(across(all_of(measures_col), ~ as.numeric(ifelse(. == ".", "0", .)))) %>%
+  mutate(across(all_of(measures_col), ~ as.numeric(.))) %>%
+  group_by(subj_id, trial, text) %>%
+  arrange(word_id, .by_group = TRUE) %>%
+  mutate(
+    prev_len = lag(len),
+    prev_freq = lag(freq),
+    prev_surp = lag(surp)
+  ) %>%
+  ungroup() %>%
+  filter(freq > 0, prev_freq > 0, surp > 0, prev_surp > 0) %>%
+  # mutate(
+  #   len = as.numeric(scale(len)),
+  #   freq = as.numeric(scale(freq)),
+  #   surp = as.numeric(scale(surp)),
+  #   prev_len = as.numeric(scale(prev_len)),
+  #   prev_freq = as.numeric(scale(prev_freq)),
+  #   prev_surp = as.numeric(scale(prev_surp))
+  # ) %>%
+  mutate(
+    subj = paste0("s", subj),
+    text = paste0("t", text)
+  ) %>%
+  filter(total_duration != 0) %>% 
+  pivot_longer(cols = all_of(measures_col), names_to = "measures", values_to = "value") %>%
+  group_by(measures) %>%
+  mutate(
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE)
+  ) %>%
+  filter((measures %in% c("FPReg", "skip")) | value <= (mean + 5 * sd)) %>%
+  ungroup() %>%
+  dplyr::select(-mean, -sd)
+
+hkc_para_sent <- rbind(hkc_sent, hkc_para)
+
+hkc <- hkc_para_sent %>%
+  mutate(
+    c1 = ifelse(format == "P", 1, 0), #  paragraph reading
+    c2 = ifelse(format == "S", 1, 0)  # sentence reading
+  ) %>%
+  # filter(freq > 0, prev_freq > 0, surp > 0, prev_surp > 0) %>%
+  drop_na()
+
+View(hkc)
+```
+
+```{r}
+hkc_anno <- hkc %>%
+  filter(measures == "gaze_duration") %>%
+  pivot_longer(cols = c(len, freq, surp),
+               names_to = "var",
+               values_to = "esti") %>%
+  dplyr::select(-trial, -text, -subj, -subj_id, -measures, -value) %>%
+  distinct() %>%
+  mutate(format = factor(format,
+                        levels = c("S", "P"),
+                        labels = c("Sentence", "Paragraph")),
+         var = factor(var,
+                      levels = c("len", "freq", "surp"),
+                      labels = c("Word Length", "Lexical Frequency", "Surprisal")))
+
+View(hkc_anno)
+```
+
+```{r}
+ggplot(hkc_anno, aes(x = esti)) +
+  geom_density(fill = "skyblue", alpha = 0.5) +
+  facet_grid(format ~ var, scales = "free_x") +
+  theme_light(base_size = 10) +
+  labs(x = "", y = "Density Distribution") +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(color = "black", size = 10),
+    strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.4)
+  )
+
+# ggsave(filename = paste0("../visualization/data_inspection/hkc_density_comparison", ".pdf"), width = 5, height = 3, dpi=300)
+```
+
+
+```{r}
+hkc_sum <- hkc_anno %>%
+  group_by(format, var) %>%
+  summarise(
+    n      = n(),
+    mean   = mean(esti, na.rm = TRUE),
+    sd     = sd(esti, na.rm = TRUE),
+    median = median(esti, na.rm = TRUE),
+    min    = min(esti, na.rm = TRUE),
+    max    = max(esti, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+
+hkc_sum 
+
+```
+
+```{r}
+gecozh_subj_reading <- read.csv("/Users/cui/Documents/uzh/PhD/Projects/Spillover/Individual-spillover-effect/data/fit_input/gecozh.csv") %>%
+  dplyr::select(subj, subj_id) %>%
+  distinct()
+
+gecozh_subj_reading
+```
+
+```{r}
+gecozh_subj_info <- read_excel("/Users/cui/Documents/uzh/PhD/Projects/Spillover/Individual-spillover-effect/data/geco-zh/Correspondence between PP_ID in the ReadingData and SubjectInformation files.xlsx") %>%
+  rename(
+    subj = `PP_ID_L1&L2ReadingData`
+  ) %>%
+  mutate(subj = paste0("s", subj)) %>%
+  rename(PP_ID = PP_ID_SubjectInformation)
+
+gecozh_subj_info
+
+gecozh_indiff <- read_excel("/Users/cui/Documents/uzh/PhD/Projects/Spillover/Individual-spillover-effect/data/geco-zh/SubjectInformation.xlsx")
+
+gecozh_indiff
+
+gecozh_indiff <- gecozh_indiff %>%
+  left_join(gecozh_subj_info, by = "PP_ID")
+
+gecozh_indiff <- gecozh_indiff %>%
+  left_join(gecozh_subj_reading, by = "subj") %>%
+  dplyr::select(-PP_ID)
+
+gecozh_rand <- read.csv("/Users/cui/Documents/uzh/PhD/Projects/Spillover/Individual-spillover-effect/results/stats/participants_random_effects_scaled.csv") %>%
+  filter(mode == "gecozh") %>%
+  dplyr::select(-measure, -mode)
+# View(gecozh_rand)
+
+gecozh_indiff <- gecozh_indiff %>%
+  left_join(gecozh_rand, by = "subj_id")
+
+View(gecozh_indiff)
+
+```
+
+```{r}
+colnames(gecozh_indiff)
+```
+
+```{r}
+gecozh_temp <- gecozh_indiff %>%
+  mutate(
+    contr = if_else(
+      ntile(`r_int_c2`, 2) == 2,  # top half
+      1,                          # high score
+      0                           # low score
+    )
+  )
+View(gecozh_temp)
+```
+
+
+```{r}
+c1 <- c("r_int_c1", "r_len_c1", "r_freq_c1", "r_surp_c1",
+        "r_prev_len_c1", "r_prev_freq_c1", "r_prev_surp_c1")
+c2 <- c("r_int_c2", "r_len_c2", "r_freq_c2", "r_surp_c2",
+        "r_prev_len_c2", "r_prev_freq_c2", "r_prev_surp_c2")
+
+cols_to_num <- unique(c(c1, c2))
+
+gecozh_num <- gecozh_temp %>%
+  mutate(across(all_of(cols_to_num), ~ suppressWarnings(as.numeric(.))))
+
+corr <- map2_dfr(c1, c2, ~{
+  var1 <- .x; var2 <- .y
+  map_dfr(sort(unique(gecozh_num$contr)), function(group_val) {
+    dat <- filter(gecozh_num, contr == group_val)
+
+    # paired complete cases
+    ok <- complete.cases(dat[[var1]], dat[[var2]])
+    n  <- sum(ok)
+
+    if (n < 3) {
+      tibble(
+        contr      = group_val,
+        comparison = paste(var1, "vs", var2),
+        r = NA_real_,
+        p = NA_real_,
+        n = n
+      )
+    } else {
+      ct <- cor.test(dat[[var1]][ok], dat[[var2]][ok],
+                     method = "pearson")
+      tibble(
+        contr      = group_val,
+        comparison = paste(var1, "vs", var2),
+        r = unname(ct$estimate),
+        p = ct$p.value,
+        n = n
+      )
+    }
+  })
+}) %>%
+  mutate(
+    sig = case_when(
+      p <= 0.001 ~ "***",
+      p <= 0.01  ~ "**",
+      p <= 0.05  ~ "*",
+      p <= 0.1   ~ "",
+      TRUE       ~ ""
+    ),
+    r = round(r, 3),
+    p = round(p, 3)
+  ) %>%
+  arrange(comparison, contr)
+
+corr
+
+```
+
+
+
+```{r}
+corr_tab <- map_dfr(
+  names(gecozh_indiff %>% dplyr::select(r_int_c1:r_prev_surp_c2)),
+  ~{
+    x <- .x
+    ct <- cor.test(
+      gecozh_indiff$`HSK_CN(%)`,
+      gecozh_indiff[[x]],
+      method = "pearson",
+      use    = "pairwise.complete.obs"
+    )
+    tibble(
+      var = x,
+      r   = unname(ct$estimate),
+      p   = ct$p.value,
+      n   = sum(complete.cases(gecozh_indiff[, c("HSK_CN(%)", x)]))
+    )
+  }
+) %>%
+  mutate(
+    sig = case_when(
+      p <= 0.001 ~ "***",
+      p <= 0.01  ~ "**",
+      p <= 0.05  ~ "*",
+      p <= 0.1   ~ "",
+      TRUE       ~ ""
+    ),
+    r = round(r, 3),
+    p = round(p, 3)
+  ) %>%
+  arrange(var)
+
+corr_tab
+```
+
+```{r}
+hkc <- read.csv("../data/hkc/hkc_para.csv", header = TRUE) %>%
+  # filter(repeated_reading_trial == "TRUE")
+  rename(Format = FORMAT)
+
+hkc_sent <- read.csv("../data/hkc/hkc_sent.csv", header = TRUE)
+
+hkc_para <- rbind(hkc, hkc_sent)
+
+```
+
+```{r}
+
+mean(hkc_para$word_len_punct, na.rm = TRUE)
+sd(hkc_para$word_len_punct, na.rm = TRUE)
+median(hkc_para$word_len_punct, na.rm = TRUE)        
+
+mean(hkc_para$zipf_freq, na.rm = TRUE)
+sd(hkc_para$zipf_freq, na.rm = TRUE)
+median(hkc_para$zipf_freq, na.rm = TRUE)
+
+mean(hkc_para$surp, na.rm = TRUE)
+sd(hkc_para$surp, na.rm = TRUE)
+median(hkc_para$surp, na.rm = TRUE)
+```
+

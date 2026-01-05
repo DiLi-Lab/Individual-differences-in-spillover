@@ -1,0 +1,772 @@
+---
+title: "plot_behav_cor"
+output: html_document
+date: "2025-09-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, warning=FALSE, message=FALSE}
+# Set locale to English
+Sys.setlocale("LC_ALL", "en_US.UTF-8")
+
+#!/usr/bin/env Rscript
+library(ggplot2)
+library(ggdist)
+library(boot)
+library(readr)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(purrr)
+library(gridExtra)
+library(lme4)
+library(lmerTest)
+library(glmmTMB)
+library(MASS)
+library(brms)
+library(HDInterval) 
+library(mirt)
+library(cowplot)
+library(grid)
+library(ggdist)
+library(RColorBrewer)
+library(colorspace)
+library(arrow)
+library(ggh4x)  # for facet_grid2(independent="x")
+```
+
+```{r}
+sum_stats <- read.csv("../results/stats/participants_reading_pattern_sum.csv")
+df <- read.csv("../results/stats/participants_random_effects_scaled.csv")
+
+reff_df <- df %>%
+  mutate(subj_id = as.character(subj_id)) %>%
+  dplyr::select(subj_id, mode, r_prev_len_c1, r_prev_len_c2, r_prev_freq_c1, r_prev_freq_c2,  r_prev_surp_c1, r_prev_surp_c2) %>%
+  pivot_longer(
+    cols = c(r_prev_len_c1, r_prev_len_c2, r_prev_freq_c1, r_prev_freq_c2,  r_prev_surp_c1, r_prev_surp_c2),
+    names_to = "contr",
+    values_to = "spillover"
+  ) %>%
+  mutate(
+    effect = str_extract(contr, "(?<=r_prev_)[a-z]+"),
+    contr = case_when(
+      str_ends(contr, "_c1") ~ "c1",
+      str_ends(contr, "_c2") ~ "c2",
+      TRUE ~ contr
+    )
+  )
+
+
+reff_local <- df %>%
+  mutate(subj_id = as.character(subj_id)) %>%
+  dplyr::select(subj_id, mode, r_len_c1, r_len_c2, r_freq_c1, r_freq_c2,  r_surp_c1, r_surp_c2) %>%
+  pivot_longer(
+    cols = c(r_len_c1, r_len_c2, r_freq_c1, r_freq_c2,  r_surp_c1, r_surp_c2),
+    names_to = "contr",
+    values_to = "local"
+  ) %>%
+  mutate(
+    effect = str_extract(contr, "(?<=r_)[a-z]+"),
+    contr = case_when(
+      str_ends(contr, "_c1") ~ "c1",
+      str_ends(contr, "_c2") ~ "c2",
+      TRUE ~ contr
+    )
+  )
+
+reff <- left_join(reff_df, reff_local, by = c("subj_id", "mode", "contr", "effect"))
+
+sum_stats <- sum_stats %>% mutate(subj_id = as.character(subj_id)) %>%
+  pivot_wider(
+    names_from = measures,
+    values_from = mean_value
+  ) %>%
+  mutate(mode = if_else(mode == "et_indico", "indicos", mode))
+
+subj_df <- left_join(reff, sum_stats, by = c("mode", "subj_id", "contr")) %>%
+  rename(Spillover = spillover,
+         Contrast = contr) %>%
+  pivot_longer(
+    cols = c(local, skip, FPReg),
+    names_to = "measures",
+    values_to = "Rate"
+  ) %>%
+  mutate(mode = factor(mode,
+                        levels = c("indicos", "potec", "onestop", "geconl", "gecozh", "hkc"),
+                        labels = c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")),
+         measures = factor(measures,
+                           levels = c("skip", "FPReg", "local"),
+                           labels = c("Skip Rate", "Regression Rate", "Local Effect")),
+         effect = factor(effect, 
+                         levels = c("len", "freq", "surp"),
+                         labels = c("Word Length", "Lexical Frequency", "Surprisal"))
+         ) %>%
+  distinct() %>%
+  drop_na()
+View(subj_df)
+```
+
+
+```{r}
+model_prefix <- paste0("../models/behavior/")
+fnames <- list.files(path=model_prefix)
+print(fnames)
+
+# read in models, get random effects for each participant, store in a df.
+df <- data.frame()
+for (f in fnames) {
+    m <- read_rds(paste0(model_prefix, "/", f))
+    mode <- strsplit(f, "_")[[1]][1]
+    effect <- strsplit(f, "_")[[1]][2]
+    measures <- strsplit(f, "_")[[1]][4]
+    contr <- strsplit(f, "_")[[1]][5]
+    sum <- summary(m, pars = c("rho"))$summary
+    rho_stats <- sum["rho", c("mean", "2.5%", "97.5%")]
+    row <- tibble(
+    mode = mode,
+    effect = effect,
+    measures = measures,
+    contr = contr,
+    rho_mean = rho_stats["mean"],
+    rho_lower = rho_stats["2.5%"],
+    rho_upper = rho_stats["97.5%"]
+  )
+  df <- rbind(df, row)
+}
+
+df <- df %>%
+  mutate(
+    contr = case_when(
+      contr == "c1.rds" ~ "c1",
+      contr == "c2.rds" ~ "c2",
+      TRUE ~ "all"
+    ),
+    measures = str_remove(measures, "\\.rds$")
+  )
+
+model_prefix <- paste0("../models/cor_scaled/")
+fnames <- list.files(path=model_prefix)
+print(fnames)
+
+# read in models, get random effects for each participant, store in a df.
+local_df <- data.frame()
+for (f in fnames) {
+    m <- read_rds(paste0(model_prefix, "/", f))
+    mode <- strsplit(f, "_")[[1]][1]
+    posterior_correlations <- as_draws_df(m) %>%
+      mutate(
+        mode = mode,
+        measures = "Local Effect",
+        cor_c1_len = `cor_subj_id__c1:len__c1:prev_len`,
+        cor_c2_len = `cor_subj_id__c2:len__c2:prev_len`,
+        cor_c1_freq = `cor_subj_id__c1:freq__c1:prev_freq`,
+        cor_c2_freq = `cor_subj_id__c2:freq__c2:prev_freq`,
+        cor_c1_surp = `cor_subj_id__c1:surp__c1:prev_surp`,
+        cor_c2_surp = `cor_subj_id__c2:surp__c2:prev_surp`,
+        ) %>%
+      dplyr::select(mode, measures, cor_c1_len, cor_c2_len, cor_c1_freq, cor_c2_freq, cor_c1_surp, cor_c2_surp)
+  local_df <- bind_rows(local_df, posterior_correlations)
+}
+
+local_sum <- local_df %>%
+  group_by(mode, measures) %>%
+  summarise(
+    across(
+      .cols = c(cor_c1_len, cor_c2_len, cor_c1_freq, cor_c2_freq, cor_c1_surp, cor_c2_surp),
+      .fns = list(
+        mean = mean,
+        lower = ~ quantile(.x, 0.025),
+        upper = ~ quantile(.x, 0.975)
+        # lower = ~ hdi(.x, credMass = 0.95)[1],
+        # upper = ~ hdi(.x, credMass = 0.95)[2]
+      ),
+      .names = "{.col}_{.fn}"
+    ),
+    .groups = "drop"
+  ) %>% pivot_longer(
+    cols = 3:20,
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(
+    parts = str_split(variable, "_", simplify = TRUE),
+    contr = parts[, 2],
+    effect = parts[, 3],
+    stat = paste0("rho_", parts[, 4])
+  ) %>%
+  mutate(mode = factor(mode,
+                        levels = c("indicos", "potec", "onestop", "geconl", "gecozh", "hkc"),
+                        labels = c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")),
+         effect = factor(effect, 
+                         levels = c("len", "freq", "surp"),
+                         labels = c("Word Length", "Lexical Frequency", "Surprisal"))) %>%
+  dplyr::select(mode, measures, contr, effect, stat, value) %>%
+  pivot_wider(
+    names_from = stat,
+    values_from = value
+  )
+  
+behavior <- bind_rows(df, local_sum) %>%
+    mutate(mode = factor(mode,
+                        levels = c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC"),
+                        labels = c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")),
+         measures = factor(measures,
+                           levels = c("Skip Rate", "Regression Rate", "Local Effect"),
+                           labels = c("Skip Rate", "Regression Rate", "Local Effect")),
+         effect = factor(effect, 
+                         levels = c("Word Length", "Lexical Frequency", "Surprisal"),
+                         labels = c("Word Length", "Lexical Frequency", "Surprisal"))
+         ) %>%
+  arrange(mode, measures, effect, contr) %>% 
+  rename(Contrast = contr) %>%
+  mutate(
+    annotation = sprintf(
+      "hat(rho) == %.2f*\"[\"*%.2f*\",\" ~ %.2f*\"]\"",
+      rho_mean, rho_lower, rho_upper
+    ),
+    x_pos = ifelse(Contrast == "c1", -Inf, Inf),
+    y_pos = ifelse(Contrast == "c1", Inf, -Inf),
+    hjust_val = ifelse(Contrast == "c1", -0.05, 1.05),
+    vjust_val = ifelse(Contrast == "c1", 1.1, -0.1)
+  ) %>% filter(Contrast != "all")
+  
+View(behavior)
+# write_csv(behavior, "../results/stats/behavior_cor_spillover_skip_regress_bayesian_scaled.csv")
+```
+
+```{r}
+modes <- c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")
+
+label_list <- list(
+  "InDiCo"   = c("c1" = "Session 1",  "c2" = "Session 2"),
+  "PoTeC"    = c("c1" = "In",         "c2" = "Out"),
+  "OneStop"  = c("c1" = "Repeated",   "c2" = "Normal"),
+  "GECO-NL"  = c("c1" = "L1",         "c2" = "L2"),
+  "GECO-ZH"  = c("c1" = "L1",         "c2" = "L2"),
+  "HKC"      = c("c1" = "Paragraph",  "c2" = "Sentence")
+)
+
+label_list["InDiCo"]
+```
+
+```{r}
+for (mod in c("OneStop")) {
+  behavior_tmp <- behavior %>% 
+    filter(!measures %in% c("Local Effect")) %>%
+    filter(mode == mod)
+  
+  p <- subj_df %>%
+    filter(!measures %in% c("Local Effect")) %>%
+    filter(mode == mod) %>%
+    ggplot(aes(x = Spillover, y = Rate, color = Contrast)) +
+    geom_point(alpha = 0.7, size = 0.8) +
+    geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+    facet_grid(measures ~ effect, scales = "free") +
+    scale_y_continuous(expand = expansion(mult = c(0.15, 0.15))) +
+    geom_text(
+      data = behavior_tmp,
+      aes(x = x_pos, y = y_pos, label = annotation, color = Contrast,
+          hjust = hjust_val, vjust = vjust_val),
+      inherit.aes = FALSE,
+      size = 3,
+      parse = TRUE
+    ) +
+    scale_color_manual(
+      values = c("c1" = "#3C64FF", "c2" = "#E6281E"),
+      labels = label_list[[mod]]
+    ) +
+    scale_x_continuous(n.breaks = 4) +
+    guides(color = guide_legend(title = mod)) +
+    labs(
+      x = "Spillover Effect Size",
+      y = NULL
+    ) +
+    theme_light(base_size = 13) +
+    theme(
+      legend.position = "right",
+      strip.text = element_text(color = "black", size = 12),
+      strip.background = element_blank(),
+      panel.spacing = unit(1, "lines"),
+      panel.grid = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA),
+      plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
+    )
+
+  # Save the plot for this mode
+  ggsave(
+    filename = paste0("../visualization/paper/behav_cor/", mod, "_skip_regr_spillover_cor.pdf"),
+    plot = p,
+    width = 8,
+    height = 4.5,
+    dpi = 300
+  )
+}
+```
+
+```{r}
+for (mod in modes) {
+  behavior_tmp <- behavior %>% 
+    filter(measures %in% c("Local Effect")) %>%
+    filter(mode == mod)
+  
+  p <- subj_df %>%
+    filter(measures %in% c("Local Effect")) %>%
+    filter(mode == mod) %>%
+    ggplot(aes(x = Spillover, y = Rate, color = Contrast)) +
+    geom_point(alpha = 0.7, size = 0.8) +
+    geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+    facet_grid(measures ~ effect, scales = "free") +
+    scale_y_continuous(expand = expansion(mult = c(0.15, 0.15))) +
+    geom_text(
+      data = behavior_tmp,
+      aes(x = x_pos, y = y_pos, label = annotation, color = Contrast,
+          hjust = hjust_val, vjust = vjust_val),
+      inherit.aes = FALSE,
+      size = 3,
+      parse = TRUE
+    ) +
+    scale_color_manual(
+      values = c("c1" = "#3C64FF", "c2" = "#E6281E"),
+      labels = label_list[[mod]]
+    ) +
+    scale_x_continuous(n.breaks = 4) +
+    guides(color = guide_legend(title = mod)) +
+    labs(
+      x = "Spillover Effect Size",
+      y = NULL
+    ) +
+    theme_light(base_size = 13) +
+    theme(
+      legend.position = "right",
+      strip.text = element_text(color = "black", size = 12),
+      strip.background = element_blank(),
+      panel.spacing = unit(1, "lines"),
+      panel.grid = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA),
+      plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
+    )
+
+  # Save the plot for this mode
+  ggsave(
+    filename = paste0("../visualization/paper/behav_cor/Local/", mod, "_local_spillover_cor.pdf"),
+    plot = p,
+    width = 8,
+    height = 8/3,
+    dpi = 300
+  )
+}
+```
+
+```{r archived chunk, eval=FALSE}
+subj_sum <- subj_df %>%
+  dplyr::select(subj_id, mode, Contrast, Spillover, effect) %>%
+  distinct() %>%
+  group_by(mode, Contrast, effect) %>%
+  summarize(
+    mean = mean(Spillover),
+    sd = sd(Spillover),
+    n = n()
+  )
+
+ttest_pvals <- subj_df %>%
+  dplyr::select(subj_id, mode, Contrast, Spillover, effect) %>%
+  distinct() %>%
+  group_by(mode, effect) %>%
+  nest() %>%
+  mutate(
+    data_wide = map(data, ~ pivot_wider(.x, names_from = Contrast, values_from = Spillover)),
+    t_test = map(data_wide, ~ t.test(.x[[2]], .x[[3]], paired = TRUE)),  # t test between c1 and c2
+    p_value = map_dbl(t_test, ~ .x$p.value)
+  ) %>%
+  dplyr::select(mode, effect, p_value)
+
+subj_sum_combined <- subj_sum %>%
+  left_join(ttest_pvals, by = c("mode", "effect"))
+View(subj_sum_combined)
+
+write_csv(subj_sum_combined, "../results/stats/subj_sum_stats.csv")
+```
+
+```{r}
+
+modes   <- c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")
+effects <- c("Word Length", "Lexical Frequency", "Surprisal")
+
+df_plot <- subj_df %>%
+  filter(measures %in% "Local Effect") %>%
+  mutate(
+    mode   = factor(mode,   levels = modes),
+    effect = factor(effect, levels = effects)
+  )
+
+behavior_ann <- behavior %>%
+  filter(measures %in% "Local Effect") %>%
+  mutate(
+    mode   = factor(mode,   levels = modes),
+    effect = factor(effect, levels = effects)
+  )
+
+p <- ggplot(df_plot, aes(Spillover, Rate, color = Contrast)) +
+  geom_point(alpha = 0.7, size = 0.8) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  geom_text(
+    data = behavior_ann,
+    aes(x = x_pos, y = y_pos, label = annotation, color = Contrast,
+        hjust = hjust_val, vjust = vjust_val),
+    inherit.aes = FALSE, size = 3, parse = TRUE
+  ) +
+  scale_color_manual(values = c("c1" = "#3C64FF", "c2" = "#E6281E")) +
+  scale_x_continuous(n.breaks = 4) +
+  labs(x = "Spillover Effect Size", y = NULL) +
+  ggh4x::facet_grid2(
+    rows = vars(mode),
+    cols = vars(effect),
+    scales = "free_x",
+    independent = "x"  # per-panel x-axes
+  ) +
+  theme_light(base_size = 11) +
+  theme(
+    legend.position  = "none",
+    strip.background = element_blank(),
+    strip.text.x     = element_text(color = "black", size = 10),  # keep EFFECT
+    strip.text.y     = element_blank(),                           # hide MODE
+    panel.border     = element_rect(color = "black", fill = NA),
+    panel.grid       = element_blank()
+  )
+
+ggsave(
+  filename = "../visualization/paper/behav_cor/ALL_local_spillover_cor.pdf",
+  plot = p,
+  width = 6,
+  height = 12,
+  dpi = 300
+)
+```
+
+
+```{r}
+effects <- c("Word Length", "Lexical Frequency", "Surprisal")
+
+for (mod in modes) {
+  for (eff in effects) {
+    plot_df <- subj_df %>%
+      filter(mode == mod, measures == "Local Effect") %>%
+      mutate(x_pos = ifelse(Contrast == "c1", 1, 2)) %>%
+      filter(effect == eff)
+    axis_labels <- unname(label_list[[mod]][c("c1", "c2")])
+    p <- ggplot() +
+      # Blue half-eye (c1)
+      stat_halfeye(
+        data = plot_df %>% filter(Contrast == "c1"),
+        aes(x = x_pos - 0.85, y = Rate, fill = Contrast),
+        show.legend = FALSE, 
+        adjust = 0.5,
+        side = "left",
+        alpha = 0.6,
+        width = 0.8,
+        justification = 0,
+        .width = 0,
+        point_colour = NA
+      ) +
+      # Red half-eye (c2)
+      stat_halfeye(
+        data = plot_df %>% filter(Contrast == "c2"),
+        aes(x = x_pos + 0.15, y = Rate, fill = Contrast),
+        show.legend = FALSE, 
+        adjust = 0.5,
+        side = "right",
+        alpha = 0.6,
+        width = 0.8,
+        justification = 0,
+        .width = 0,
+        point_colour = NA
+      ) +
+      # Boxplots
+      geom_boxplot(
+        data = plot_df %>% filter(Contrast == "c1"),
+        aes(x = x_pos - 0.3, y = Rate, fill = Contrast),
+        width = 0.2,
+        alpha = 0.5,
+        outlier.shape = NA
+      ) +
+      geom_boxplot(
+        data = plot_df %>% filter(Contrast == "c2"),
+        aes(x = x_pos + 0.3, y = Rate, fill = Contrast),
+        width = 0.2,
+        alpha = 0.5,
+        outlier.shape = NA
+      ) +
+      # Paired lines
+      geom_line(
+        data = plot_df,
+        aes(x = x_pos, y = Rate, group = subj_id),
+        color = "gray60",
+        size = 0.3,
+        alpha = 0.5
+      ) +
+      # Jittered points
+      geom_jitter(
+        data = plot_df,
+        aes(x = x_pos, y = Rate, color = Contrast),
+        width = 0.08,
+        size = 1,
+        alpha = 0.6
+      ) +
+      facet_wrap(~effect, scales = "free") +
+      scale_x_continuous(breaks = c(1, 2),labels = axis_labels) +
+      scale_fill_manual(values = c("c1" = "#3C64FF", "c2" = "#E6281E")) +
+      scale_color_manual(values = c("c1" = "#3C64FF", "c2" = "#E6281E"),labels = label_list[[mod]]) +
+      guides(color = guide_legend(title = mod)) +
+      labs(x = "", y = "Local Effect") +
+      theme_light(base_size = 13) +
+      theme(
+        legend.position = "none",
+        strip.background = element_blank(),
+        strip.text = element_text(color = "black", size = 13),
+        panel.border = element_rect(color = "black", fill = NA),
+        panel.grid = element_blank(),
+        axis.text.x = element_text(color = "black"),
+        axis.ticks.x = element_line(color = "black")
+      )
+ggsave(filename = sprintf("../visualization/paper/indiv_breakdown/Local/%s_Local_Effect_%s.pdf", mod, gsub(" ", "_", eff)), plot = p, width = 3, height = 3, dpi = 300)
+  }
+}
+```
+
+
+
+
+```{r}
+
+plot <- subj_df %>%
+  dplyr::select(-measures, -Rate, -subj) %>%
+  distinct() %>%
+  mutate(x_pos = ifelse(Contrast == "c1", 1, 2)) %>%
+  filter(mode == "OneStop", effect == "Lexical Frequency")  # Word Length, Lexical Frequency, Surprisal
+
+ggplot() +
+  #  Blue (c1)
+  stat_halfeye(
+    data = plot %>% filter(Contrast == "c1"),
+    aes(x = x_pos-0.85, y = Spillover, fill = Contrast),
+    adjust = 0.5,
+    side = "left",
+    alpha = 0.6,
+    width = 0.8,
+    justification = 0,
+    .width = 0,
+    point_colour = NA
+  ) +
+
+  # Red (c2)
+  stat_halfeye(
+    data = plot %>% filter(Contrast == "c2"),
+    aes(x = x_pos+0.15, y = Spillover, fill = Contrast),
+    adjust = 0.5,
+    side = "right",
+    alpha = 0.6,
+    width = 0.8,
+    justification = 0,
+    .width = 0,
+    point_colour = NA
+  ) +
+  
+  geom_boxplot(
+    data = plot %>% filter(Contrast == "c1"),
+    aes(x = x_pos - 0.3, y = Spillover, fill = Contrast),
+    width = 0.2,
+    alpha = 0.5,
+    outlier.shape = NA
+  ) +
+
+  # Boxplot for c2
+  geom_boxplot(
+    data = plot %>% filter(Contrast == "c2"),
+    aes(x = x_pos + 0.3, y = Spillover, fill = Contrast),
+    width = 0.2,
+    alpha = 0.5,
+    outlier.shape = NA
+  ) +
+  
+  geom_line(
+    data = plot,
+    aes(x = x_pos, y = Spillover, group = subj_id),
+    color = "gray60",
+    size = 0.3,
+    alpha = 0.5
+  ) +
+  geom_jitter(
+    data = plot,
+    aes(x = x_pos, y = Spillover, color = Contrast),
+    width = 0.08,
+    size = 0.6,
+    alpha = 0.4
+  ) +
+  facet_wrap(~effect, scales = "free", ncol=3,
+             labeller = labeller(effect = function(x) "")
+             ) +
+  scale_x_continuous(
+    breaks = c(1, 2),
+    labels = c("Repeated", "Normal")
+  ) +
+  scale_fill_manual(values = c("c1" = "#3C64FF", "c2" = "#E6281E")) +
+  scale_color_manual(values = c("c1" = "#3C64FF", "c2" = "#E6281E")) +
+  labs(
+    x = NULL,
+    y = "Lexical Frequency Spillover"
+  ) +
+  theme_light(base_size = 13) +
+  theme(
+    legend.position = "none",
+    strip.background = element_blank(),
+    strip.text = element_text(color = "black", size = 13),
+    axis.text.x = element_text(color = "black"),   # darker tick labels
+    panel.border = element_rect(color = "black", fill = NA),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  )
+
+ggsave(filename = paste0("../visualization/scaled/spillover_by_individual_breakdown/OneStop_Lexical_ Frequency_spillover_by_individual", ".pdf"), width = 3, height = 3, dpi=300)
+
+```
+
+```{r}
+desired_levels <- c(
+  "InDiCo\nWord Length", "PoTeC\nWord Length", "OneStop\nWord Length",
+  "GECO-NL\nWord Length", "GECO-ZH\nWord Length", "HKC\nWord Length",
+  "InDiCo\nLexical Frequency", "PoTeC\nLexical Frequency", "OneStop\nLexical Frequency",
+  "GECO-NL\nLexical Frequency", "GECO-ZH\nLexical Frequency", "HKC\nLexical Frequency",
+  "InDiCo\nSurprisal", "PoTeC\nSurprisal", "OneStop\nSurprisal",
+  "GECO-NL\nSurprisal", "GECO-ZH\nSurprisal", "HKC\nSurprisal"
+)
+
+
+spillover_local_rel <- read.csv("../results/stats/spillover_measurement_reliability.csv") %>%
+  # filter(location == "spillover") %>%
+  group_by(mode, measure, location) %>%
+  summarise(
+    across(
+      .cols = c(cor_len, cor_freq, cor_surp),
+      .fns = list(
+        mean = mean,
+        # lower = ~ hdi(.x, credMass = 0.95)[1],
+        # upper = ~ hdi(.x, credMass = 0.95)[2]
+        lower = ~ quantile(.x, 0.025),
+        upper = ~ quantile(.x, 0.975)
+      ),
+      .names = "{.col}_{.fn}"
+    ),
+    .groups = "drop"
+  ) %>% pivot_longer(
+    cols = starts_with("cor_"),
+    names_to = c("effect", "stat"),
+    names_pattern = "cor_(len|freq|surp)_(mean|lower|upper)",
+    values_to = "value"
+  ) %>%
+  pivot_wider(
+    names_from = stat,
+    values_from = value
+  ) %>%
+  rename(
+    mean = mean,
+    crI_lower = lower,
+    crI_upper = upper
+  ) %>% mutate(mode = factor(mode, 
+                             levels = c("indicos", "potec", "onestop", "geconl", "gecozh", "hkc"),
+                             labels = c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")),
+               location = factor(location, levels = c("local", "spillover"),
+                                 labels = c("Local", "Spillover")),
+               effect = factor(effect,
+                               levels = c("len", "freq", "surp"),
+                               labels = c("Word Length", "Lexical Frequency", "Surprisal"))) %>%
+  mutate(
+    annotation = sprintf(
+      "hat(rho) == %.2f*\"[\"*%.2f*\",\" ~ %.2f*\"]\"",
+      mean, crI_lower, crI_upper
+    ),
+    x_pos = Inf,
+    y_pos = -Inf,
+    hjust_val = 1.05,
+    vjust_val = -0.1
+  )
+  
+# write_csv(spillover_local_rel, "../results/stats/spillover_local_reliability_with_crI.csv")
+# View(spillover_local_rel)
+
+spillover_df <- spillover_local_rel %>%
+  dplyr::filter(location == "Spillover") %>%     # or "Local" if you prefer
+  dplyr::group_by(mode, effect, location) %>%
+  dplyr::slice(1) %>%                            # avoids repeated labels per facet
+  dplyr::ungroup() %>%
+  dplyr::mutate(strip_label = factor(
+      paste(as.character(mode), as.character(effect), sep = "\n"),
+      levels = desired_levels
+    ))
+```
+
+
+```{r}
+plot <- subj_df %>%
+  dplyr::select(-measures, -Rate, -subj) %>%
+  distinct() %>%
+  mutate(x_pos = ifelse(Contrast == "c1", 1, 2)) #%>%
+  # filter(mode == "HKC")
+
+plot_wide <- plot %>%
+  dplyr::select(mode, subj_id, effect, Contrast, Spillover) %>%
+  pivot_wider(
+    names_from = Contrast,
+    values_from = Spillover
+  ) 
+```
+
+```{r}
+plot_wide <- plot_wide %>%
+  mutate(
+    # lock in the order of each factor (optional but recommended)
+    mode   = factor(mode,   levels = c("InDiCo","PoTeC","OneStop","GECO-NL","GECO-ZH","HKC")),
+    effect = factor(effect, levels = c("Word Length","Lexical Frequency","Surprisal")),
+    strip_label = factor(
+      paste(as.character(mode), as.character(effect), sep = "\n"),
+      levels = desired_levels
+    )
+  )
+
+ggplot(plot_wide, aes(x = c1, y = c2)) +
+  geom_point(alpha = 0.6, size = 0.7, color = "royalblue4") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(
+    x = "Spillover Effect (Session 1 || In-doman || Repeated || L1 || Paragraph Reading)",
+    y = "Spillover Effect (Session 2 || Out-of-doman || Normal || L2 || Sentence Reading)"
+  ) +
+  theme_light() +
+  facet_wrap(~ strip_label, scales = "free", ncol = 6) +
+  # --- add the HPDI/CRI annotation per facet ---
+  scale_y_continuous(expand = expansion(mult = c(0.2, 0.1))) +
+  geom_text(
+    data = spillover_df,
+    aes(x = x_pos, y = y_pos, label = annotation),
+    inherit.aes = FALSE,
+    parse = TRUE,
+    hjust = spillover_df$hjust_val[1],
+    vjust = spillover_df$vjust_val[1],
+    size = 3,
+    color = "#FF7F00"
+  ) +
+  theme(
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(size = 7),
+    axis.text.y = element_text(size = 7),
+    strip.text = element_text(color = "black", size = 10),
+    strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.4),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+ggsave(filename = paste0("../visualization/scaled/cor_c1c2", ".pdf"), width = 12, height = 6)
+
+```

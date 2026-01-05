@@ -1,0 +1,187 @@
+---
+title: "Plot individual length spillover"
+output: html_document
+date: "2025-10-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, warning=FALSE, message=FALSE}
+# Set locale to English
+Sys.setlocale("LC_ALL", "en_US.UTF-8")
+
+#!/usr/bin/env Rscript
+library(ggplot2)
+library(ggdist)
+library(boot)
+library(readr)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(purrr)
+library(gridExtra)
+library(lme4)
+library(lmerTest)
+library(glmmTMB)
+library(MASS)
+library(brms)
+library(HDInterval) 
+library(mirt)
+library(cowplot)
+library(grid)
+library(ggdist)
+library(RColorBrewer)
+library(colorspace)
+```
+
+
+```{r}
+m <- read_rds("../models/cor_scaled/indicos_gaze_duration.rds")
+mode <- "InDiCo"
+
+pe <- brms::fixef(m, probs = c(.025, .975)) 
+popeff <- pe["prev_len", "Estimate"]
+
+ran <- ranef(m)
+ran_subj <- ran[["subj_id"]]
+# ran_subj
+indi <- as.data.frame(ran_subj[, , 1:14]) %>%
+  dplyr::select(`Estimate.c1:prev_len`, `Q2.5.c1:prev_len`, `Q97.5.c1:prev_len`,
+                `Estimate.c2:prev_len`, `Q2.5.c2:prev_len`, `Q97.5.c2:prev_len`) %>%
+  mutate(., across(dplyr::contains("prev_len"), ~ . + popeff)) %>%
+  rename(spmu_len_c1 = `Estimate.c1:prev_len`,
+                splo_len_c1 = `Q2.5.c1:prev_len`,
+                spup_len_c1 = `Q97.5.c1:prev_len`,
+                spmu_len_c2 = `Estimate.c2:prev_len`,
+                splo_len_c2 = `Q2.5.c2:prev_len`,
+                spup_len_c2 = `Q97.5.c2:prev_len`) %>%
+  rownames_to_column("subj_id") %>%
+  arrange(spmu_len_c1) %>%
+  mutate(subject = factor(subj_id, levels = subj_id),
+         mode = mode) %>%
+  dplyr::select(subject, spmu_len_c1, splo_len_c1, spup_len_c1,
+                          spmu_len_c2, splo_len_c2, spup_len_c2) %>%
+  pivot_longer(
+    cols = c("spmu_len_c1", "splo_len_c1", "spup_len_c1", "spmu_len_c2", "splo_len_c2", "spup_len_c2"),
+    names_to   = c(".value", "contrast"),
+    names_pattern = "(sp..)_len_(c[12])"
+  ) %>%
+  mutate(contrast = factor(contrast, levels = c("c1", "c2"), labels = c("Session 1", "Session 2")))
+  dplyr::select(subject, contrast, spmu, splo, spup)
+
+View(indi)
+
+sum_indi <- indi %>%
+  dplyr::group_by(contrast) %>%
+  dplyr::summarize(mean = mean(spmu),
+                   lq   = mean(splo),
+                   hq   = mean(spup),
+                   .groups = "drop")
+sum_indi
+```
+
+```{r}
+ggplot(indi, aes(x = spmu, xmin = splo, xmax = spup, y = subject, color = contrast)) +
+  geom_errorbarh(height = 0.3, size = 0.5) +
+  geom_point(size = 1) +
+  geom_vline(data = sum_indi, aes(xintercept = mean, color = contrast), linewidth = 0.4) +
+  geom_vline(data = sum_indi, aes(xintercept = lq,   color = contrast), linetype = "dashed", linewidth = 0.3) +
+  geom_vline(data = sum_indi, aes(xintercept = hq,   color = contrast), linetype = "dashed", linewidth = 0.3) +
+  facet_grid(. ~ contrast) +
+  scale_color_manual(values = c("Session 1" = "black", "Session 2" = "black")) +
+  xlab("(a) Participant-level Word Length Spillover effect in InDiCo") +
+  # xlab("") +
+  ylab("Participant ID") +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position      = "none",
+    panel.grid.major.x   = element_line(linewidth = 0.2, colour = "grey85"),
+    panel.grid.major.y   = element_line(linewidth = 0.2, colour = "grey90"),
+    panel.grid.minor     = element_blank(),
+    panel.background     = element_blank(),
+    panel.border         = element_rect(colour = "grey70", fill = NA, linewidth = 0.4),
+    strip.text           = element_text(face = "bold"),
+    strip.background     = element_blank(),
+    panel.spacing.x      = unit(2, "pt"),
+    axis.text.y          = element_text(size = 9),   # smaller y-axis tick labels
+    axis.title.x = element_text(margin = margin(t = 10))  
+  )
+
+ggsave(filename = paste0("../visualization/paper/reliability/by-subject_indico_len.pdf"), width = 5, height = 8, dpi = 300
+)
+```
+
+```{r}
+pe <- brms::fixef(m, probs = c(.025, .975)) 
+popeff <- pe["prev_surp", "Estimate"]
+popeff
+indi_surp <- as.data.frame(ran_subj[, , 1:14]) %>%
+  dplyr::select(`Estimate.c1:prev_surp`, `Q2.5.c1:prev_surp`, `Q97.5.c1:prev_surp`,
+                `Estimate.c2:prev_surp`, `Q2.5.c2:prev_surp`, `Q97.5.c2:prev_surp`) %>%
+   mutate(., across(dplyr::contains("prev_surp"), ~ . + popeff)) %>%
+  rename(spmu_surp_c1 = `Estimate.c1:prev_surp`,
+                splo_surp_c1 = `Q2.5.c1:prev_surp`,
+                spup_surp_c1 = `Q97.5.c1:prev_surp`,
+                spmu_surp_c2 = `Estimate.c2:prev_surp`,
+                splo_surp_c2 = `Q2.5.c2:prev_surp`,
+                spup_surp_c2 = `Q97.5.c2:prev_surp`) %>%
+  rownames_to_column("subj_id") %>%
+  arrange(spmu_surp_c1) %>%
+  mutate(subject = factor(subj_id, levels = subj_id),
+         mode = mode) %>%
+  dplyr::select(subject, spmu_surp_c1, splo_surp_c1, spup_surp_c1,
+                          spmu_surp_c2, splo_surp_c2, spup_surp_c2) %>%
+  pivot_longer(
+    cols = c("spmu_surp_c1", "splo_surp_c1", "spup_surp_c1", "spmu_surp_c2", "splo_surp_c2", "spup_surp_c2"),
+    names_to   = c(".value", "contrast"),
+    names_pattern = "(sp..)_surp_(c[12])"
+  ) %>%
+  mutate(contrast = factor(contrast, levels = c("c1", "c2"), labels = c("Session 1", "Session 2"))) %>%
+  dplyr::select(subject, contrast, spmu, splo, spup)
+
+View(indi_surp)
+
+sum_surp <- indi_surp %>%
+  dplyr::group_by(contrast) %>%
+  dplyr::summarize(mean = mean(spmu),
+                   lq   = mean(splo),
+                   hq   = mean(spup),
+                   .groups = "drop")
+sum_surp
+```
+
+```{r}
+ggplot(indi_surp, aes(x = spmu, xmin = splo, xmax = spup, y = subject, color = contrast)) +
+  geom_errorbarh(height = 0.3, size = 0.5) +
+  geom_point(size = 1) +
+  geom_vline(data = sum_surp, aes(xintercept = mean, color = contrast), linewidth = 0.4) +
+  geom_vline(data = sum_surp, aes(xintercept = lq,   color = contrast), linetype = "dashed", linewidth = 0.3) +
+  geom_vline(data = sum_surp, aes(xintercept = hq,   color = contrast), linetype = "dashed", linewidth = 0.3) +
+  facet_grid(. ~ contrast) +
+  scale_color_manual(values = c("Session 1" = "black", "Session 2" = "black")) +
+  xlab("(b) Participant-level Surprisal Spillover effect in InDiCo") +
+  # xlab("") +
+  ylab("Participant ID") +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position      = "none",
+    panel.grid.major.x   = element_line(linewidth = 0.2, colour = "grey85"),
+    panel.grid.major.y   = element_line(linewidth = 0.2, colour = "grey90"),
+    panel.grid.minor     = element_blank(),
+    panel.background     = element_blank(),
+    panel.border         = element_rect(colour = "grey70", fill = NA, linewidth = 0.4),
+    strip.text           = element_text(face = "bold"),
+    strip.background     = element_blank(),
+    panel.spacing.x      = unit(2, "pt"),
+    axis.text.y          = element_text(size = 9),   # smaller y-axis tick labels
+    axis.title.x = element_text(margin = margin(t = 10)) 
+  )
+
+ggsave(filename = paste0("../visualization/paper/reliability/by-subject_indico_surp.pdf"), width = 5, height = 8, dpi = 300
+)
+```
+

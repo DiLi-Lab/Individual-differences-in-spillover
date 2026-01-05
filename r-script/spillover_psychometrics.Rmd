@@ -1,0 +1,383 @@
+---
+title: "Spillover effect & Psychometric profile"
+output: html_document
+date: "2025-06-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list=ls())
+```
+
+
+```{r Libraries, warning=FALSE, message=FALSE}
+# Set locale to English
+Sys.setlocale("LC_ALL", "en_US.UTF-8")
+
+#!/usr/bin/env Rscript
+library(ggplot2)
+library(boot)
+library(readr)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(readr)
+library(gridExtra)
+library(lme4)
+library(lmerTest)
+library(MASS)
+library(brms)
+library(rstan)
+library(cmdstanr)
+library(arrow)
+```
+
+## InDiCo spillover & Psychometric profile
+
+```{r Indico spillover & psychometric profile}
+indico_psy <-read.csv("../data/indico/psychometric_scores.csv") %>%
+  mutate(subj = paste0("zh", subj)) %>%
+  drop_na()
+
+memorypca <- prcomp(indico_psy[, c("MUmean","OSmean","SSmean","SSTMRelScore")], scale. = TRUE)
+indico_psy$memory <- memorypca$x[, 1]
+readingpca <- prcomp(indico_psy[, c("SLRTWord", "SLRTPseudo")], scale. = TRUE)
+indico_psy$reading <- -readingpca$x[,1]
+intelpca <- prcomp(indico_psy[, c("MWTPR", "RIASVixPR", "RIASVix", "RIASNix", "RIASNixPR", "RIASGix", "RIASGixPR")], scale. = TRUE)
+indico_psy$intelligence <- -intelpca$x[,1]
+cogcontrpca <- prcomp(indico_psy[, c("StrAccuracyEffect", "SimAccuracyEffect", "StrRTEffect", "SimRTEffect")], scale. = TRUE)
+indico_psy$cogcontr <- -cogcontrpca$x[,1]
+
+indico_rt_profile <- read.csv("../data/fit_input/et_indico.csv") %>%
+  left_join(indico_psy, by = "subj") %>%
+  drop_na()
+  
+# View(indico_rt_profile)
+
+# write_ipc_file(indico_rt_profile, "../data/fit_input_arrow/indico_incl_profile.arrow")
+```
+
+```{r}
+# priors_rt <- c(
+#   prior(normal(5.5, 0.1), class = Intercept),
+#   prior(normal(0, 0.1), class = b),
+#   prior(exponential(2), class = sd),
+#   prior(exponential(2), class = sigma),
+#   prior(lkj(1), class = cor)
+# )
+
+for(mes in c("gaze_duration")) {
+    
+  temp_df <- indico_rt_profile %>%
+    filter(measures == mes) %>%
+    filter(value > 0)
+    
+  # Fit the model for RT measures
+  model <- brms::brm(
+    value ~ 1 + len + freq + surp + prev_len * (memory + reading + intelligence + cogcontr) +
+     prev_freq * (memory + reading + intelligence + cogcontr) + 
+     prev_surp * (memory + reading + intelligence + cogcontr) + 
+    (1 + len + freq + surp | subj_id) + (1 | text_id),
+    data = temp_df,
+    chains = 4,
+    family = gaussian(),
+    warmup = 1000,
+    iter = 2000,
+    file = paste0("../models/psycho-profile/", "indico_profile_ms_", mes),
+    cores = 4,
+    backend = "rstan",
+    silent = 0,
+    # prior = priors_rt
+  )
+}
+
+print("Done fitting models")
+```
+
+
+
+```{r}
+priors_rt <- c(
+  prior(normal(5.5, 0.1), class = Intercept),
+  prior(normal(0, 0.1), class = b),
+  prior(exponential(2), class = sd),
+  prior(exponential(2), class = sigma),
+  prior(lkj(1), class = cor)
+)
+
+for(mes in c("gaze_duration")) {
+    
+  temp_df <- indico_rt_profile %>%
+    filter(measures == mes) %>%
+    filter(value > 0)
+    
+  # Fit the model for RT measures
+  model <- brms::brm(
+    value ~ 1 + len + freq + surp + prev_len * (memory + reading + intelligence + cogcontr) +
+     prev_freq * (memory + reading + intelligence + cogcontr) + 
+     prev_surp * (memory + reading + intelligence + cogcontr) + 
+    (1 + len + freq + surp | subj_id) + (1 | text_id),
+    data = temp_df,
+    chains = 4,
+    family = lognormal(link = "identity"),
+    warmup = 1000,
+    iter = 2000,
+    file = paste0("../models/psycho-profile/indico/", "indico_profile_log", mes),
+    cores = 4,
+    backend = "rstan",
+    silent = 0,
+    prior = priors_rt
+  )
+}
+
+print("Done fitting models")
+```
+
+```{r}
+m <- read_rds("/Users/cui/Documents/uzh/PhD/Projects/Spillover/Individual-spillover-effect/models/psycho-profile/indico/indico_profile_log_gaze_duration.rds")
+summary(m)
+```
+
+```{r}
+temp_df <- indico_rt_profile %>%
+  filter(measures == "gaze_duration") %>%
+  filter(value > 0)
+
+profiles <- c("reading", "memory", "intelligence", "cogcontr")
+spillovers <- c("prev_len", "prev_freq", "prev_surp")
+
+# profiles <- c("reading")
+# spillovers <- c("prev_len")
+
+interactions <- list()
+
+
+for (prof in profiles) {
+  for (spil in spillovers) {
+    message("Processing: ", prof, " × ", spil)
+    
+    mu <- mean(temp_df[[prof]], na.rm = TRUE)
+    sdv <- sd(temp_df[[prof]],   na.rm = TRUE)
+    prof_vals <- c(mu - 2*sdv, mu - sdv, mu, mu + sdv, mu + 2*sdv)
+    spill_seq <- seq(
+      min(temp_df[[spil]], na.rm = TRUE),
+      max(temp_df[[spil]], na.rm = TRUE),
+      length.out = 100
+    )
+    newdata <- expand.grid(
+      spill   = spill_seq,
+      profile = prof_vals
+    )
+    for (p in setdiff(profiles, prof)) {
+      newdata[[p]] <- mean(temp_df[[p]], na.rm = TRUE)
+    }
+    for (s in setdiff(spillovers, spil)) {
+      newdata[[s]] <- mean(temp_df[[s]], na.rm = TRUE)
+    }
+    newdata$len       <- mean(temp_df$len,       na.rm = TRUE)
+    newdata$freq      <- mean(temp_df$freq,      na.rm = TRUE)
+    newdata$surp      <- mean(temp_df$surp,      na.rm = TRUE)
+    newdata$subj_id   <- NA
+    newdata$text_id   <- NA
+    names(newdata)[names(newdata) == "profile"] <- prof
+    names(newdata)[names(newdata) == "spill"]   <- spil
+
+    if (any(duplicated(names(newdata)))) {
+      stop("Duplicate column names in newdata: ",
+           paste(names(newdata)[duplicated(names(newdata))], collapse = ", "))
+    }
+    # preds <- posterior_linpred(m, newdata = newdata, re_formula = NA)
+    preds <- posterior_epred(m, newdata = newdata, re_formula = NA)
+    newdata <- newdata %>%
+      mutate(
+        estimate      = apply(preds, 2, mean),
+        sd_pred       = apply(preds, 2, sd),
+        lower         = estimate - sd_pred,
+        upper         = estimate + sd_pred,
+        # lower = apply(preds, 2, quantile, 0.25),
+        # upper = apply(preds, 2, quantile, 0.75),
+        profile_var   = prof,
+        spillover_var = spil
+      )
+    interactions[[paste(prof, spil, sep = "_x_")]] <- newdata
+  }
+}
+
+# quick sanity checks
+length(interactions)                  # expect 12
+sapply(interactions, nrow)  
+
+interaction_df <- bind_rows(interactions, .id = "interaction_id")
+nrow(interaction_df)  # expect 12 * 500 = 6000
+
+# write_csv(interaction_df, "../results/stats/interaction.csv")
+```
+
+```{r}
+profiles   <- c("reading", "memory", "intelligence", "cogcontr")
+spillovers <- c("prev_len", "prev_freq", "prev_surp")
+
+spill_labels <- c(
+  prev_len  = "Standardized Word Len. (n-1)",
+  prev_freq = "Standardized Lexical Freq. (n-1)",
+  prev_surp = "Standardized Surprisal (n-1)"
+)
+
+profile_pretty <- c(
+  reading      = "Reading Fluency",
+  memory       = "Working Memory",
+  intelligence = "Intelligence",
+  cogcontr     = "Cognitive Control"
+)
+
+for (profile in profiles) {
+
+  dfp <- interaction_df %>%
+    filter(profile_var == profile) %>%
+    mutate(
+      spillover_var = factor(spillover_var, levels = c("prev_len","prev_freq","prev_surp")),
+      x = case_when(
+        spillover_var == "prev_len"  ~ prev_len,
+        spillover_var == "prev_freq" ~ prev_freq,
+        spillover_var == "prev_surp" ~ prev_surp,
+        TRUE ~ NA_real_
+      ),
+      profile_level = {
+        vals <- .data[[profile]]
+        lvls <- sort(unique(vals))
+        if (length(lvls) == 5) {
+          factor(vals, levels = lvls,
+                 labels = c("-2 SD","-1 SD","Mean","+1 SD","+2 SD"))
+        } else {
+          factor(vals)
+        }
+      }
+    )
+
+  p <- ggplot(dfp, aes(x = x, y = estimate, color = profile_level, fill = profile_level)) +
+    geom_line(linewidth = 0.9) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.15, color = NA) +
+    facet_wrap(
+      ~ spillover_var,
+      nrow = 1,
+      scales = "free_x",
+      labeller = labeller(spillover_var = spill_labels),
+      strip.position = "bottom"
+    ) +
+    labs(
+      x = NULL,
+      y = "log(Gaze Duration)",
+      color = profile_pretty[[profile]],
+      fill  = profile_pretty[[profile]]
+    ) +
+    # coord_cartesian(ylim = c(5.3, 5.8)) +
+    theme_minimal() +
+    theme(
+      legend.position      = "right",
+      legend.title.align   = 0.5,
+      strip.placement      = "outside",
+      panel.grid.major.x   = element_line(linewidth = 0.2, colour = "grey85"),
+      panel.grid.major.y   = element_line(linewidth = 0.2, colour = "grey90"),
+    ) +
+    guides(
+      fill  = "none",
+      color = guide_legend(
+      title.position = "top",
+      label.hjust    = 0.5
+      )
+    )
+
+  outfile <- paste0("../visualization/paper/psych/interaction_", profile, ".pdf")
+  ggsave(filename = outfile, plot = p, width = 8, height = 2, dpi = 300)
+  message("Saved: ", outfile)
+}
+
+```
+
+
+```{r}
+spillovers <- c("prev_len", "prev_freq", "prev_surp")
+profiles   <- c("reading", "memory", "intelligence", "cogcontr")
+
+# Updated facet labels
+profile_labels <- c(
+  reading = "Reading Fluency",
+  memory = "Working Memory",
+  intelligence = "Intelligence",
+  cogcontr = "Cognitive Control"
+)
+
+spill_labels <- c(
+  prev_len  = "Standardized Previous Word Length",
+  prev_freq = "Standardized Previous Word Frequency",
+  prev_surp = "Standardized Previous Word Surprisal"
+)
+
+# Exact x-axis text requested (uses “Lexical Frequency” and the en dash minus n−1)
+spill_xlab <- c(
+  prev_len  = "Standardized Previous Word Length",
+  prev_freq = "Standardized Previous Lexical Frequency",
+  prev_surp = "Standardized Previous Surprisal"
+)
+
+for (spill in spillovers) {
+  dfs <- interaction_df %>%
+    filter(spillover_var == spill) %>%
+    mutate(
+      profile_var = factor(profile_var, levels = profiles),
+      x = case_when(
+        spillover_var == "prev_len"  ~ prev_len,
+        spillover_var == "prev_freq" ~ prev_freq,
+        spillover_var == "prev_surp" ~ prev_surp,
+        TRUE ~ NA_real_
+      )
+    ) %>%
+    group_by(profile_var) %>%
+    mutate(
+      vals = case_when(
+        profile_var == "reading"      ~ reading,
+        profile_var == "memory"       ~ memory,
+        profile_var == "intelligence" ~ intelligence,
+        profile_var == "cogcontr"     ~ cogcontr,
+        TRUE ~ NA_real_
+      ),
+      profile_level = {
+        lvls <- sort(unique(vals))
+        if (length(lvls) == 5) {
+          factor(vals, levels = lvls,
+                 labels = c("-2 SD","-1 SD","Mean","+1 SD","+2 SD"))
+        } else {
+          factor(vals)
+        }
+      }
+    ) %>%
+    ungroup()
+
+  p <- ggplot(dfs, aes(x = x, y = estimate, color = profile_level, fill = profile_level)) +
+    geom_line(linewidth = 0.9) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.15, color = NA) +
+    facet_wrap(
+      ~ profile_var, nrow = 1, scales = "free_x",
+      labeller = labeller(profile_var = profile_labels)
+    ) +
+    labs(
+      x = spill_xlab[[spill]],
+      y = "log(Gaze Duration)"
+      # no title
+    ) +
+    theme_light() +
+    theme(
+      legend.position = "none",
+      strip.text = element_text(size = 10, color = "black"),  # Increase facet label size
+      strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.4)
+      )
+
+  outfile <- paste0("../visualization/paper/psych/interaction_", spill, ".pdf")
+  ggsave(filename = outfile, plot = p, width = 8, height = 3, dpi = 300)
+  message("Saved: ", outfile)
+}
+```
+
