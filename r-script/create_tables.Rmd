@@ -1,7 +1,7 @@
 ---
 title: "Create-Latex-Table"
 output: html_document
-date: "2025-08-18"
+date: "2024-08-18"
 ---
 
 ```{r setup, include=FALSE}
@@ -42,21 +42,20 @@ spec(cor_study2)
 
 ```{r Orders & labels}
 # --- Orders & labels --------------------------------------------------------
-effect_order   <- c("Word Length", "Lexical Frequency", "Surprisal")
-measure_order  <- c("Skip Rate", "Regression Rate", "Local Effect")
-mode_order     <- c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")
+effect_order<- c("Word Length", "Lexical Frequency", "Surprisal")
+measure_order <- c("Skip Rate", "Regression Rate", "Local Effect")
+mode_order <- c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")
 contrast_order <- c("c1", "c2")
 ```
 
 
 ```{r Create correlation table cor_behav}
-
 # --- Flags & formatters -----------------------------------------------------
 cor_study2 <- cor_study2 %>%
   mutate(bold = (rho_lower > 0 & rho_upper > 0) | (rho_lower < 0 & rho_upper < 0))
 
 fmt_mean <- function(x) sprintf("%.2f", x)
-fmt_ci   <- function(lo, hi) sprintf("[%.2f, %.2f]", lo, hi)
+fmt_ci <- function(lo, hi) sprintf("[%.2f, %.2f]", lo, hi)
 
 contrast_label <- function(mode, contrast) {
   switch(mode,
@@ -98,19 +97,26 @@ lines <- c(
   "\\resizebox{\\textwidth}{!}{%",
   "\\begin{tabular}{@{}>{\\centering\\arraybackslash}m{0.9cm}@{}c ccccccccc@{}}",
   "\\toprule",
-  # "% \\midrule",
+
   # Header row 1
-  "\\multicolumn{2}{>{\\centering\\arraybackslash}m{2.6cm}}{\\large\\textbf{Correlation b/w}} & ",
-  "\\multicolumn{3}{c}{\\textbf{Word Length Spillover}} & ",
-  "\\multicolumn{3}{c}{\\textbf{Lexical Frequency Spillover}} & ",
-  "\\multicolumn{3}{c}{\\textbf{Surprisal Spillover}} \\\\",
+  paste0(
+    "\\multicolumn{2}{>{\\centering\\arraybackslash}m{2.6cm}}",
+    "{\\large\\textbf{Correlation (\\boldmath$\\hat{\\rho}$) b/w}} & ",
+    "\\multicolumn{3}{c}{\\textbf{Word Length Spillover}} & ",
+    "\\multicolumn{3}{c}{\\textbf{Lexical Frequency Spillover}} & ",
+    "\\multicolumn{3}{c}{\\textbf{Surprisal Spillover}} \\\\"
+  ),
+
   "\\cmidrule(lr){3-5}\\cmidrule(lr){6-8}\\cmidrule(lr){9-11}",
+
   # Header row 2
-  "\\multicolumn{2}{c}{} & ",
-  paste0("\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.} & ",
-         "\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.} & ",
-         "\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.}"),
-  " \\\\",
+  paste0(
+    "\\multicolumn{2}{c}{} & ",
+    "\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.} & ",
+    "\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.} & ",
+    "\\textbf{Skip Rate} & \\textbf{Regr. Rate} & \\textbf{Local Eff.} \\\\"
+  ),
+
   "\\midrule",
   "\\rowcolors{3}{gray!08}{white}"
 )
@@ -156,7 +162,7 @@ for (mode in mode_order) {
   lines <- c(lines, "\\addlinespace[6pt]")
 }
   }
-  lines <- c(lines, "% \\midrule")
+  lines <- c(lines, " \\midrule")
 }
 
 lines <- c(
@@ -164,14 +170,14 @@ lines <- c(
   "\\bottomrule",
   "\\end{tabular}",
   "}% end resizebox",
-  "}% end normalsize",
-  "\\caption{Top row per contrast shows $\\rho$; the row beneath shows $[\\text{lower},\\,\\text{upper}]$.}",
-  "\\label{cor_behav_meas}",
+  "}% end scriptsize",
+"\\caption{Posterior mean correlations and 95\\% credible intervals between spillover effects and reading pattern measures (skip rate, regression rate, and local effects). Values in bold indicate correlations whose 95\\% credible intervals exclude zero.}",
+  "\\label{tab:cor_behav_meas}",
   "\\end{table}"
 )
 
 # --- Write LaTeX to file ----------------------------------------------------
-writeLines(lines, "../results/latex/cor_behav_meas2.tex")
+writeLines(lines, "../results/latex/cor_behav_meas.tex")
 
 ```
 
@@ -276,7 +282,7 @@ lines <- c(
   "\\end{tabular}",
   "}% end resizebox",
   "}% end normalsize",
-  "\\caption{Population level effect summaries by predictor (Local vs. Spillover). }",
+  "\\caption{Posterior mean and 95\\% credible intervals for the local and spillover fixed effects of word length, lexical frequency, and surprisal across datasets. Effects are shown in log space (natural logarithms).}",
   "\\label{tab:pop_effects}",
   "\\end{table}"
 )
@@ -410,7 +416,7 @@ lines <- c(
   "\\end{tabular}",
   "}% end resizebox",
   "}% end scriptsize",
-  "\\caption{Overall reliability estimates.}",
+  "\\caption{Posterior mean correlation coefficients ($\\hat{r}$) and 95\\% credible intervals (CrIs) for local and spillover effects of word length, lexical frequency, and surprisal. Bold indicates CrIs excluding zero.}",
   "\\label{tab:overall_rel}",
   "\\end{table}"
 )
@@ -422,55 +428,130 @@ writeLines(lines, out_path)
 cat(paste(lines, collapse = "\n"))
 ```
 
-```{r Psychometric_profile table}
-m <- read_rds("../models/psycho-profile/indico_profile_log_gaze_duration.rds")
+```{r Psychometric_profile_table}
+m <- read_rds("../models/psycho-profile/indico_profile_log_rt_full_int_full_raneff_6000iter_bayes.rds")
 
-# 1) grab fixed effects and keep only what's needed (rounded to 3 decimals)
-f <- brms::fixef(m, probs = c(0.025, 0.975))
+# 1) Extract fixed effects and retain the required statistics
+f <- brms::fixef(
+  m,
+  probs = c(0.025, 0.055, 0.945, 0.975)
+)
+
 f_df <- data.frame(
   term     = rownames(f),
-  Estimate = round(f[, "Estimate"], 3),
-  l95      = round(f[, "Q2.5"],     3),
-  u95      = round(f[, "Q97.5"],    3),
+  Estimate = f[, "Estimate"],
+  l89      = f[, "Q5.5"],
+  u89      = f[, "Q94.5"],
+  l95      = f[, "Q2.5"],
+  u95      = f[, "Q97.5"],
   row.names = NULL,
   check.names = FALSE
 )
 
-# 2) formatting function (uses your macros)
-fmt <- function(m, lo, up) {
-  same_sign <- (lo > 0 & up > 0) | (lo < 0 & up < 0)
-  ifelse(
-    same_sign,
-    sprintf("\\sigestci{%.3f}{%.3f}{%.3f}", m, lo, up),
-    sprintf("\\nonsigestci{%.3f}{%.3f}{%.3f}", m, lo, up)
-  )
+# 2) Format estimates using the LaTeX significance macros
+fmt <- function(m, l89, u89, l95, u95) {
+  excludes_zero_89 <- (l89 > 0 & u89 > 0) | (l89 < 0 & u89 < 0)
+  excludes_zero_95 <- (l95 > 0 & u95 > 0) | (l95 < 0 & u95 < 0)
+
+  cell <- if (excludes_zero_95) {
+    sprintf(
+      "\\sigestci{%.3f}{%.3f}{%.3f}",
+      m, l95, u95
+    )
+  } else {
+    sprintf(
+      "\\nonsigestci{%.3f}{%.3f}{%.3f}",
+      m, l95, u95
+    )
+  }
+
+  # if (excludes_zero_89) {
+  #   cell <- paste0("\\textbf{", cell, "}")
+  # }
+
+  if (excludes_zero_89) {
+    cell <- paste0(cell, "\\textsuperscript{\\(\\diamond\\)}")
+  }
+
+  cell
 }
 
-# 3) helper to fetch an interaction regardless of order "a:b" vs "b:a"
+# 3) Fetch an interaction regardless of term order: a:b or b:a
 get_cell_interaction <- function(a, b) {
-  t1 <- paste0(a, ":", b)
-  t2 <- paste0(b, ":", a)
-  row <- f_df[f_df$term == t1 | f_df$term == t2, , drop = FALSE]
-  if (nrow(row) != 1) stop("Missing/duplicate interaction term: ", a, ":", b)
-  fmt(row$Estimate, row$l95, row$u95)
+  possible_terms <- c(
+    paste0(a, ":", b),
+    paste0(b, ":", a)
+  )
+
+  row <- f_df[
+    f_df$term %in% possible_terms,
+    ,
+    drop = FALSE
+  ]
+
+  if (nrow(row) != 1) {
+    stop(
+      "Missing or duplicate interaction term: ",
+      paste0(a, ":", b)
+    )
+  }
+
+  fmt(row$Estimate, row$l89, row$u89, row$l95, row$u95)
 }
 
-# 4) table layout (row and column labels)
-row_labels <- c("Previous Word Len.", "Previous Lex. Freq.", "Previous Surprisal")
-col_headers <- c("Interaction b/w", "Reading Fluency", "Working Memory",
-                 "Intelligence", "Cognitive Control")
-
-# interactions in the required order for each row
-row_terms <- list(
-  list(c("prev_len","reading"),      c("prev_len","memory"),
-       c("prev_len","intelligence"), c("prev_len","cogcontr")),
-  list(c("prev_freq","reading"),      c("prev_freq","memory"),
-       c("prev_freq","intelligence"), c("prev_freq","cogcontr")),
-  list(c("prev_surp","reading"),      c("prev_surp","memory"),
-       c("prev_surp","intelligence"), c("prev_surp","cogcontr"))
+# 4) Table labels
+row_labels <- c(
+  "Current Word Len.",
+  "Current Lex. Freq.",
+  "Current Surprisal",
+  "Previous Word Len.",
+  "Previous Lex. Freq.",
+  "Previous Surprisal"
 )
 
-# 5) build LaTeX lines (simple booktabs table)
+col_headers <- c(
+  "Interaction b/w",
+  "Reading Fluency",
+  "Working Memory",
+  "Cognitive Control"
+)
+
+# 5) Interactions in the required column order:
+#    Reading Fluency, Working Memory, Cognitive Control
+row_terms <- list(
+  list(
+    c("len", "reading"),
+    c("len", "memory"),
+    c("len", "cogcontr")
+  ),
+  list(
+    c("freq", "reading"),
+    c("freq", "memory"),
+    c("freq", "cogcontr")
+  ),
+  list(
+    c("surp", "reading"),
+    c("surp", "memory"),
+    c("surp", "cogcontr")
+  ),
+  list(
+    c("prev_len", "reading"),
+    c("prev_len", "memory"),
+    c("prev_len", "cogcontr")
+  ),
+  list(
+    c("prev_freq", "reading"),
+    c("prev_freq", "memory"),
+    c("prev_freq", "cogcontr")
+  ),
+  list(
+    c("prev_surp", "reading"),
+    c("prev_surp", "memory"),
+    c("prev_surp", "cogcontr")
+  )
+)
+
+# 6) Build the LaTeX table
 lines <- c(
   "\\begin{table}[ht]",
   "\\centering",
@@ -478,17 +559,37 @@ lines <- c(
   "\\setlength{\\tabcolsep}{6pt}",
   "\\renewcommand{\\arraystretch}{1.2}",
   "\\resizebox{\\textwidth}{!}{%",
-  "\\begin{tabular}{lcccc}",
+  "\\begin{tabular}{lccc}",
   "\\toprule",
-  paste0("\\textbf{", paste(col_headers, collapse = "} & \\textbf{"), "} \\\\"),
+  paste0(
+    "\\textbf{",
+    paste(col_headers, collapse = "} & \\textbf{"),
+    "} \\\\"
+  ),
   "\\midrule"
 )
 
 for (i in seq_along(row_labels)) {
-  cells <- vapply(row_terms[[i]], function(pair) {
-    get_cell_interaction(pair[1], pair[2])
-  }, character(1))
-  lines <- c(lines, paste(c(row_labels[i], cells), collapse = " & "), " \\\\")
+  cells <- vapply(
+    row_terms[[i]],
+    function(pair) {
+      get_cell_interaction(pair[1], pair[2])
+    },
+    character(1)
+  )
+
+  lines <- c(
+    lines,
+    paste0(
+      paste(c(row_labels[i], cells), collapse = " & "),
+      " \\\\"
+    )
+  )
+
+  # Visually separate current-word and previous-word interactions
+  if (i == 3) {
+    lines <- c(lines, "\\midrule")
+  }
 }
 
 lines <- c(
@@ -497,17 +598,118 @@ lines <- c(
   "\\end{tabular}",
   "}% end resizebox",
   "}% end scriptsize",
-  "\\caption{Interaction coefficients}",
-  "\\label{tab:psych_spillvoer_interaction}",
+  "\\caption{Posterior means and credible intervals for interaction effects between cognitive abilities and current-word and spillover predictors, including word length, lexical frequency, and surprisal. Estimates are reported on the log reading-time scale (natural
+logarithms). Boldface indicates estimates whose 95\\% credible intervals exclude zero; a superscript diamond (\\(\\diamond\\)) indicates estimates whose 89\\% credible intervals exclude zero.}",
+  "\\label{tab:psych_word_interactions}",
   "\\end{table}"
 )
 
-# 6) write to file (and also print to console)
+# 7) Write to file and print to console
 out_path <- "../results/latex/psych_interaction_table.tex"
-dir.create(dirname(out_path), recursive = TRUE, showWarnings = FALSE)
+
+dir.create(
+  dirname(out_path),
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
 writeLines(lines, out_path)
 cat(paste(lines, collapse = "\n"))
 
 
 ```
+
+#####Archive#######
+
+```{r archive 1}
+fmt_two_line <- function(m, lo, up, eps = 0) {
+  # optional: treat tiny values as zero to avoid -0.00 and near-zero sign flips
+  if (eps > 0) {
+    z <- function(x) ifelse(abs(x) < eps, 0, x)
+    m  <- z(m); lo <- z(lo); up <- z(up)
+  }
+  same_sign <- (lo > 0 & up > 0) | (lo < 0 & up < 0)
+
+  mean_norm <- sprintf("$%.2f$", m)
+  ci_norm   <- sprintf("$[%.2f,\\,%.2f]$", lo, up)
+
+  mean_bold <- paste0("{\\boldmath$", sprintf("%.2f", m), "$}")
+  ci_bold   <- paste0("{\\boldmath$[", sprintf("%.2f", lo), ",\\,", sprintf("%.2f", up), "]$}")
+
+  cell_norm <- paste0("\\shortstack[c]{", mean_norm, " \\\\ ", ci_norm, "}")
+  cell_bold <- paste0("\\shortstack[c]{", mean_bold, " \\\\ ", ci_bold, "}")
+
+  ifelse(same_sign, cell_bold, cell_norm)
+}
+
+rb_tab <- rb %>%
+  dplyr::mutate(
+    cell = fmt_two_line(mean_eff, lower, upper)
+  ) %>%
+  dplyr::select(predictor, mode, cell) %>%
+  tidyr::pivot_wider(names_from = mode, values_from = cell)
+
+# --- Header: bold each line of the mode names inside \shortstack ------------
+mk_head <- function(x) {
+  vapply(x, function(s) {
+    parts <- strsplit(s, "\n", fixed = TRUE)[[1]]
+    if (length(parts) >= 1) parts[1] <- paste0("\\textbf{", parts[1], "}")
+    paste0("\\shortstack[c]{", paste(parts, collapse = " \\\\ "), "}")
+  }, character(1))
+}
+
+# Column (mode) order from the pivoted table (everything except first col 'predictor')
+mode_order <- names(rb_tab)[names(rb_tab) != "predictor"]
+
+row_strut <- "\\rule{0pt}{2.2ex}"
+colspec   <- paste0("@{}l", paste(rep("c", length(mode_order)), collapse = ""), "@{}")
+
+# Header row: explicit empty top-left cell + bold-per-line shortstacks
+header_line <- paste(
+  c("\\multicolumn{1}{c}{}", mk_head(mode_order)),
+  collapse = " & "
+)
+
+# --- LaTeX builder ----------------------------------------------------------
+lines <- c(
+  "\\begin{table}[ht]",
+  "\\centering",
+  "{\\scriptsize",
+  "\\setlength{\\tabcolsep}{2.5pt}",
+  "\\renewcommand{\\arraystretch}{1.22}",
+  "\\resizebox{\\textwidth}{!}{%",
+  paste0("\\begin{tabular}{", colspec, "}"),
+  "\\toprule",
+  paste0(header_line, " \\\\"),
+  "\\midrule"
+)
+
+for (r in seq_len(nrow(rb_tab))) {
+  pred_lab <- paste0("\\textbf{", as.character(rb_tab$predictor[r]), "}")
+  cells    <- as.character(unlist(rb_tab[r, mode_order], use.names = FALSE))
+  if (length(cells) > 0) cells[1] <- paste0(row_strut, " ", cells[1])  # slight row height on first cell
+  lines <- c(lines, paste(c(pred_lab, cells), collapse = " & "), "\\\\")
+}
+
+lines <- c(
+  lines,
+  "\\bottomrule",
+  "\\end{tabular}",
+  "}% end resizebox",
+  "}% end scriptsize",
+  "\\caption{Cross-context spillover measurement reliability (95\\% credible intervals) by predictor and mode.}",
+  "\\label{tab:spillover_reliability}",
+  "\\end{table}"
+)
+
+out_path <- "../results/latex/overall_spillover_reliability.tex"
+dir.create(dirname(out_path), recursive = TRUE, showWarnings = FALSE)
+writeLines(lines, out_path)
+cat(paste(lines, collapse = "\n"))
+```
+
+
+
+
+
 

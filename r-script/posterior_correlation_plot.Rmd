@@ -1,11 +1,15 @@
 ---
 title: "plot"
 output: html_document
-date: "2025-08-18"
+date: "2024-08-18"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list=ls())
 ```
 
 ```{r Libraries, warning=FALSE, message=FALSE}
@@ -85,7 +89,7 @@ for (f in fnames) {
 
 # View(df)
 
-# write_csv(df, "../results/stats/spillover_measurement_reliability.csv")
+write_csv(df, "../results/stats/spillover_measurement_reliability.csv")
 ```
 
 ```{r SET COLOR}
@@ -234,7 +238,7 @@ tcorr_posteriors <- df %>%
 
 p_et <- create_et_plot(tcorr_posteriors)
 p_et
-ggsave(p_et, filename = paste0("../visualization/paper/x_spillover_correlations_minimal_comb", ".pdf"), width = 12, height = 5, dpi=300)
+ggsave(p_et, filename = paste0("../visualization/paper/x_spillover_correlations", ".pdf"), width = 12, height = 5, dpi=300)
 ```
 
 ```{r Fixed Effect DF}
@@ -284,7 +288,7 @@ dff_long <- dff %>%
   )) %>%
   mutate(predictor = factor(predictor,
                          levels = c("len", "freq", "surp", "contr"),
-                         labels = c("Word Len.", "Lex. Freq.", "Surprisal", "Contrast")),
+                         labels = c("Word Len.", "Lex. Freq.", "Surprisal", "Reading Context")),
           mode = factor(mode,
                         levels = c("indicos", "potec", "onestop", "geconl", "gecozh", "hkc"),
                         labels = c("InDiCo", "PoTeC", "OneStop", "GECO-NL", "GECO-ZH", "HKC")),
@@ -317,9 +321,10 @@ ggplot(plot_df, aes(y = location, x = mean_eff, color = location)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey51") +
   facet_grid(rows = vars(mode), cols = vars(predictor), scales = "free_x") +
   scale_color_manual(
-    name = "Effect Location:",
+    # name = "Effect Location:",
+    name = "",
     values = c("Spillover" = "#FF7F00", "Local" = "#33A024"),
-    labels = c("Spillover" = "Spillover (Word n-1)", "Local" = "Local (Word n)")
+    labels = c("Spillover" = "Spillover Effect (from word n-1)", "Local" = "Local Effect (from word n)")
   ) +
   xlab("Effect Size") +
   ylab(NULL) + 
@@ -381,7 +386,7 @@ for (f in fnames) {
 }
 
 # df
-# write_csv(df, "../results/stats/participants_random_effects_scaled.csv")
+write_csv(df, "../results/stats/participants_random_effects_scaled.csv")
 
 ```
 
@@ -411,7 +416,7 @@ df_summary_c2 <- df %>%
 sum_stats <- bind_rows(sum_stats, df_summary_c2)
   
 }
-# View(sum_stats)
+View(sum_stats)
 write_csv(sum_stats, "../results/stats/participants_reading_pattern_sum.csv")
 
 ```
@@ -559,7 +564,7 @@ for (f in fnames) {
 
 dff
 
-# write_csv(dff, "../results/stats/behavior_cor_spillover_local_bayesian_scaled.csv")
+write_csv(dff, "../results/stats/behavior_cor_spillover_local_bayesian_scaled.csv")
 ```
 
 
@@ -635,7 +640,7 @@ View(subj_df)
 ```
 
 ```{r}
-modes <- c("OneStop")
+modes <- c("InDiCo", "PoTeC")
 measures <- c("Skip Rate", "Regression Rate")
 effects <- c("Word Length", "Lexical Frequency", "Surprisal")
 
@@ -681,19 +686,7 @@ for (mod in modes) {
     }
   }
 }
-
 ```
-
-
-## OLD CODES FOR PLOT --> see spillover_behav_correlation_plot.Rmd for new codes
-
-```{r}
-mhkc <- read_rds("/Users/cui/Documents/uzh/PhD/Projects/Spillover/Individual-spillover-effect/models/cor_scaled/onestop_gaze_duration.rds")
-
-summary(mhkc)
-
-```
-
 
 ```{r}
 model_prefix <- paste0("../models/behavior/")
@@ -818,12 +811,26 @@ behavior <- bind_rows(df, local_sum) %>%
     vjust_val = ifelse(Contrast == "c1", 1.1, -0.1)
   ) %>% filter(Contrast != "all")
   
-# View(behavior)
-# write_csv(behavior, "../results/stats/behavior_cor_spillover_skip_regress_bayesian_scaled.csv")
+View(behavior)
+write_csv(behavior, "../results/stats/behavior_cor_spillover_skip_regress_bayesian_scaled.csv")
 ```
 
+
+
+
+
+
+
+
+
+
+
+#######Archived################
+
+
+
 ```{r}
-behavior_tmp <- behavior %>% filter(mode == "HKC")
+behavior_tmp <- behavior %>% filter(mode == "InDiCo")
 
 subj_df %>% filter(mode == "HKC") %>% 
   ggplot(., aes(x = Spillover, y = Rate, color = Contrast)) +
@@ -856,7 +863,7 @@ subj_df %>% filter(mode == "HKC") %>%
     panel.border = element_rect(color = "black", fill = NA),  # adds black subplot frame
     plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
   )
-# ggsave(filename = paste0("../visualization/scaled/HKC_spillover_reading_pattern", ".pdf"), width = 7, height = 6, dpi=300)
+# ggsave(filename = paste0("../visualization/scaled/InDiCo_spillover_reading_pattern", ".pdf"), width = 7, height = 6, dpi=300)
 ```
 
 ```{r}
@@ -886,7 +893,7 @@ subj_sum_combined <- subj_sum %>%
   left_join(ttest_pvals, by = c("mode", "effect"))
 View(subj_sum_combined)
 
-# write_csv(subj_sum_combined, "../results/stats/subj_sum_stats.csv")
+write_csv(subj_sum_combined, "../results/stats/subj_sum_stats.csv")
 ```
 
 ```{r}
@@ -1117,7 +1124,7 @@ plot <- subj_df %>%
   dplyr::select(-measures, -Rate, -subj) %>%
   distinct() %>%
   mutate(x_pos = ifelse(Contrast == "c1", 1, 2)) %>%
-  filter(mode == "HKC", effect == "Word Length")  # Word Length, Lexical Frequency, Surprisal
+  filter(mode == "PoTeC", effect == "Surprisal")  # Word Length, Lexical Frequency, Surprisal
 
 ggplot() +
   #  Blue (c1)
@@ -1182,13 +1189,13 @@ ggplot() +
              ) +
   scale_x_continuous(
     breaks = c(1, 2),
-    labels = c("Paragraph", "Sentence")
+    labels = c("In-Dom.", "Out-Dom.")
   ) +
   scale_fill_manual(values = c("c1" = "#3C64FF", "c2" = "#E6281E")) +
   scale_color_manual(values = c("c1" = "#3C64FF", "c2" = "#E6281E")) +
   labs(
     x = NULL,
-    y = "Word Length Spillover"
+    y = "Surprisal Spillover"
   ) +
   theme_light(base_size = 13) +
   theme(
@@ -1201,7 +1208,7 @@ ggplot() +
     plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
   )
 
-ggsave(filename = paste0("../visualization/scaled/spillover_by_individual_breakdown/HKC_Word_ Length_spillover_by_individual", ".pdf"), width = 3, height = 3, dpi=300)
+ggsave(filename = paste0("../visualization/scaled/spillover_by_individual_breakdown/PoTeC_Surprisal_spillover_by_individual", ".pdf"), width = 3, height = 3, dpi=300)
 
 ```
 
@@ -1340,3 +1347,613 @@ ggplot(plot_wide, aes(x = c1, y = c2)) +
 ggsave(filename = paste0("../visualization/scaled/cor_c1c2", ".pdf"), width = 12, height = 6)
 
 ```
+
+
+```{r Indico spillover & psychometric profile}
+indicos <- read_rds("../models/psycho-profile/indico/indicos_gaze_duration.rds")
+# summary(indicos)
+measure <- "gaze_duration"
+mode <- "indicos"
+
+ran <- ranef(indicos)
+ran_subj <- ran[["subj_id"]]
+# ran_subj
+indico_reff <- as.data.frame(ran_subj[, , 5:7]) %>%
+  dplyr::select(`Estimate.prev_len`, `Estimate.prev_freq`, `Estimate.prev_surp`) %>%
+  rename(
+         r_prev_len = `Estimate.prev_len`,
+         r_prev_freq = `Estimate.prev_freq`,
+         r_prev_surp = `Estimate.prev_surp`
+         ) %>%
+  mutate(measure = measure, mode = mode) %>%
+  rownames_to_column("subj_id")
+
+# get original subj_id
+indico_subj <- read.csv("../data/fit_input/et_indico.csv") %>%
+  dplyr::select(subj_id, subj) %>%
+  distinct() %>%
+  mutate(subj_id = as.character(subj_id))
+
+View(indico_subj)
+
+indico_reff <- indico_reff %>%
+  left_join(indico_subj, by = "subj_id") %>%
+  filter(!str_starts(subj, "pt"))
+View(indico_reff)
+
+indico_psy <-read.csv("../data/indico/psychometric_scores.csv") %>%
+  mutate(subj = paste0("zh", subj)) %>%
+  drop_na()
+
+memorypca <- prcomp(indico_psy[, c("MUmean","OSmean","SSmean","SSTMRelScore")], scale. = TRUE)
+indico_psy$memory <- memorypca$x[, 1]
+readingpca <- prcomp(indico_psy[, c("SLRTWord", "SLRTPseudo")], scale. = TRUE)
+indico_psy$reading <- -readingpca$x[,1]
+intelpca <- prcomp(indico_psy[, c("MWTPR", "RIASVixPR", "RIASVix", "RIASNix", "RIASNixPR", "RIASGix", "RIASGixPR")], scale. = TRUE)
+indico_psy$intelligence <- -intelpca$x[,1]
+cogcontrpca <- prcomp(indico_psy[, c("StrAccuracyEffect", "SimAccuracyEffect")], scale. = TRUE)
+indico_psy$cogcontr <- -cogcontrpca$x[,1]
+
+View(indico_psy)
+
+indico_profile <- indico_reff %>% 
+  left_join(indico_psy, by = "subj") %>%
+  # dplyr::select(subj, subj_id, r_prev_len, r_prev_freq, r_prev_surp, memory, reading, intelligence, cogcontr) %>%
+  drop_na()
+
+View(indico_profile)
+```
+
+
+```{r}
+indico_rt_profile <- read.csv("../data/fit_input/et_indico.csv") %>%
+  left_join(indico_psy, by = "subj") %>%
+  drop_na()
+  
+View(indico_rt_profile)
+
+# write_ipc_file(indico_rt_profile, "../data/fit_input_arrow/indico_incl_profile.arrow")
+```
+
+
+```{r}
+priors_rt <- c(
+  prior(normal(5.5, 0.1), class = Intercept),
+  prior(normal(0, 0.1), class = b),
+  prior(exponential(2), class = sd),
+  prior(exponential(2), class = sigma),
+  prior(lkj(1), class = cor)
+)
+
+for(mes in c("gaze_duration")) {
+    
+  temp_df <- indico_rt_profile %>%
+    filter(measures == mes) %>%
+    filter(value > 0)
+    
+  # Fit the model for RT measures
+  model <- brms::brm(
+    value ~ 1 + len + freq + surp + prev_len + prev_freq + prev_surp + 
+      memory + reading + intelligence + cogcontr +
+    (1 + len + freq + surp + prev_len + prev_freq + prev_surp +
+       memory + reading + intelligence + cogcontr | text_trial_id),
+    data = temp_df,
+    chains = 4,
+    family = lognormal(link = "identity"),
+    warmup = 1000,
+    iter = 2000,
+    file = paste0("../models/psycho-profile/", "indico_profile_", mes),
+    cores = 4,
+    backend = "rstan",
+    silent = 0,
+    prior = priors_rt
+  )
+}
+
+print("Done fitting models")
+```
+
+
+
+
+
+
+```{r}
+m <- read_rds("../models/psycho-profile/indico_profile_gaze_duration.rds")
+summary(m)
+```
+
+
+
+```{r}
+print("------------------------------------")
+cor.test(indico_profile$r_prev_len, indico_profile$memory)
+cor.test(indico_profile$r_prev_len, indico_profile$reading)
+cor.test(indico_profile$r_prev_len, indico_profile$intelligence)
+cor.test(indico_profile$r_prev_len, indico_profile$cogcontr)
+# cor.test(indico_profile$r_prev_len, indico_profile$cogcontr_rt)
+print("------------------------------------")
+cor.test(indico_profile$r_prev_freq, indico_profile$memory)
+cor.test(indico_profile$r_prev_freq, indico_profile$reading)
+cor.test(indico_profile$r_prev_freq, indico_profile$intelligence)
+cor.test(indico_profile$r_prev_freq, indico_profile$cogcontr)
+# cor.test(indico_profile$r_prev_freq, indico_profile$cogcontr_rt)
+print("------------------------------------")
+cor.test(indico_profile$r_prev_surp, indico_profile$memory)
+cor.test(indico_profile$r_prev_surp, indico_profile$reading)
+cor.test(indico_profile$r_prev_surp, indico_profile$intelligence)
+cor.test(indico_profile$r_prev_surp, indico_profile$cogcontr)
+# cor.test(indico_profile$r_prev_surp, indico_profile$cogcontr_rt)
+```
+
+```{r}
+mtemp <- read_rds("../models/psycho-profile/indico/indicos_gaze_duration.rds")
+summary(mtemp)
+```
+
+
+
+```{r}
+plot(indico_profile$r_prev_surp,
+     indico_profile$r_prev_freq,
+     # xlab = "Previous Frequency",
+     # ylab = "Previous Surprisal",
+     main = "Scatterplot of Frequency vs Surprisal",
+     pch = 19,          # solid circles
+     col = "blue")      # point color
+
+# Optionally, add a regression line
+abline(lm(r_prev_freq ~ r_prev_surp, data = indico_profile),
+       col = "red", lwd = 2)
+```
+
+
+
+```{r}
+target_dv <- c("r_prev_len", "r_prev_freq", "r_prev_surp")
+predictors <- c("SLRTWord", "SSmean", "StrAccuracyEffect", "StrRTEffect", "MWTPR", "RIASVixPR")
+
+# Store results
+model_stats <- list()
+
+for (dv in target_dv) {
+  current_predictors <- c()
+  loglik_step <- data.frame(
+    target_dv = character(),
+    step = character(),
+    logLik = numeric(),
+    AIC = numeric(),
+    BIC = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Start with intercept-only model
+  model <- lm(as.formula(paste0(dv, " ~ 1")), data = indico_profile)
+  loglik_step <- loglik_step %>%
+    bind_rows(data.frame(
+      target_dv = dv,
+      step = "base",
+      logLik = as.numeric(logLik(model)),
+      AIC = AIC(model),
+      BIC = BIC(model)
+    ))
+  
+  # Add predictors one by one
+  for (pred in predictors) {
+    current_predictors <- c(current_predictors, pred)
+    formula_str <- paste(dv, "~", paste(current_predictors, collapse = " + "))
+    model <- lm(as.formula(formula_str), data = indico_profile)
+    
+    loglik_step <- loglik_step %>%
+      bind_rows(data.frame(
+        target_dv = dv,
+        step = paste(current_predictors, collapse = "+"),
+        logLik = as.numeric(logLik(model)),
+        AIC = AIC(model),
+        BIC = BIC(model)
+      ))
+  }
+  
+  model_stats[[dv]] <- loglik_step
+}
+
+# Combine into one dataframe
+mcomp_df <- bind_rows(model_stats)
+
+View(mcomp_df)
+
+# write_csv(mcomp_df, "../results/stats/model_comparison_psy_profile.csv")
+```
+
+```{r}
+mcomp_df <- read_csv("../results/stats/model_comparison_psy_profile.csv") %>%
+  mutate(
+    addpred = ifelse(
+      step == "base",
+      "base",
+      paste0("+", gsub(".*\\+", "", step))  # keep only the last added predictor
+    ),
+    addpred = factor(addpred,
+      levels = c("base", "+SLRTWord", "+SSmean", "+StrAccuracyEffect", "+StrRTEffect", "+MWTPR", "+RIASVixPR"),
+      labels = c("Base", "+Reading Flu.", "+WM (SS)", "+Stroop Acc", "+Stroop RT", "+Verbal (MWT)", "+Verbal (RIAS)")
+    ),
+  target_dv = factor(target_dv,
+                     levels = c("r_prev_len", "r_prev_freq", "r_prev_surp"),
+                     labels = c("Word Len. Spillover", "Lex. Freq. Spillover", "Surprisal Spillover"))
+  )
+```
+```{r}
+annots <- data.frame(
+  target_dv = c("Word Len. Spillover", "Lex. Freq. Spillover", "Surprisal Spillover"),
+  addpred = factor("+Reading Flu.", levels = levels(mcomp_df$addpred)),
+  label = c("*", "**", "***"),
+  y = c(  # manually set a bit above the corresponding y values
+    max(mcomp_df$logLik[mcomp_df$target_dv == "Word Len. Spillover" & mcomp_df$addpred == "+Reading Flu."]) + 0.5,
+    max(mcomp_df$logLik[mcomp_df$target_dv == "Lex. Freq. Spillover" & mcomp_df$addpred == "+Reading Flu."]) + 0.5,
+    max(mcomp_df$logLik[mcomp_df$target_dv == "Surprisal Spillover" & mcomp_df$addpred == "+Reading Flu."]) + 0.5
+  )
+) %>%
+  mutate(
+      target_dv = factor(target_dv,
+                     levels = c("Word Len. Spillover", "Lex. Freq. Spillover", "Surprisal Spillover"),
+                     labels = c("Word Len. Spillover", "Lex. Freq. Spillover", "Surprisal Spillover"))
+  )
+```
+
+
+```{r}
+
+ggplot(mcomp_df, aes(x = addpred, y = logLik, group = 1)) +
+  geom_line(linewidth = 1, color = "steelblue") +
+  geom_point(size = 2, color = "steelblue") +
+  facet_wrap(~target_dv, scales = "free_y") +
+  geom_text(
+    data = annots,
+    aes(x = addpred, y = y, label = label),
+    inherit.aes = FALSE,
+    size = 5
+  ) +
+  scale_y_continuous(breaks = pretty_breaks(n = 6)) +  # force integer-ish ticks
+  theme_minimal(base_size = 12) +
+  labs(
+    x = "Model Step (Incrementally Added Predictor to the Previous Model)",
+    y = "Log-Likelihood"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.4),
+    strip.text = element_text(color = "black", size = 12),
+    panel.border = element_rect(color = "gray", fill = NA, linewidth = 0.4)
+  )
+# ggsave(filename = paste0("../visualization/spillover_psy_profile_cor", ".pdf"), width = 8, height = 3, dpi=300)
+```
+
+
+
+```{r}
+# SLRTPseudo + SimAccuracyEffect + SimRTEffect + StrRTEffect
+
+
+mcor <- lm(r_prev_freq ~ 1 + memory + reading + intelligence + cogcontr, data = indico_profile)
+summary(mcor)
+
+m1 <- lm(r_prev_surp ~ 1, data = indico_profile)
+m2 <- lm(r_prev_surp ~ 1 + SLRTWord, data = indico_profile)
+
+anova(m1, m2)
+
+AIC(m1)
+AIC(m2)
+BIC(m1)
+BIC(m2)
+```
+
+
+```{r MECO spillover & psychometric profile}
+langs <- c("du", "en", "fi", "ge", "gr", "he", "it", "sp", "ko", "tr", "ru")
+# langs <- c("en")
+meco_df <- data.frame()
+
+for (lang in langs) {
+  filename <- paste0("../models/psycho-profile/meco/meco_", lang, "_gaze_duration.rds")
+  mecos <- read_rds(filename)
+  measure <- "gaze_duration"
+  mode <- "meco"
+  ran <- ranef(mecos)
+  ran_subj <- ran[["subj_id"]]
+  ran_subj
+  meco_reff <- as.data.frame(ran_subj[, , 5:7]) %>%
+    dplyr::select(`Estimate.prev_len`, `Estimate.prev_freq`, `Estimate.prev_surp`) %>%
+    rename(
+           r_prev_len = `Estimate.prev_len`,
+           r_prev_freq = `Estimate.prev_freq`,
+           r_prev_surp = `Estimate.prev_surp`
+           ) %>%
+    mutate(measure = measure, mode = mode, language = lang) %>%
+    rownames_to_column("subj_id")
+  meco_df <- bind_rows(meco_df, meco_reff)
+}
+
+View(meco_df)
+
+# get original subj_id
+# mecos_subj <- read.csv("../data/fit_input/meco_clean.csv") %>%
+#   dplyr::select(subj_id, subj, lang) %>%
+#   distinct() %>%
+#   mutate(subj_id = as.character(subj_id)) %>%
+#   rename(language = lang)
+mecos_subj <- read.csv("../data/meco/fit_input_meco.csv") %>%
+  dplyr::select(subj_id, subj, lang, measures, value) %>%
+  mutate(subj_id = as.character(subj_id)) %>%
+  filter(measures %in% c("FPReg", "skip")) %>%
+  group_by(lang, subj, subj_id, measures) %>%
+  summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = measures, values_from = mean_value) %>%
+  rename(language = lang)
+
+View(mecos_subj)
+
+meco_df <- meco_df %>%
+  left_join(mecos_subj, by = c("language", "subj_id"))
+```
+
+
+```{r meco psychometric profile prep}
+
+meco_psy <- data.frame()
+
+for (lang in langs) {
+  filename <- paste0("../data/meco/individual_differences_data/", lang, "/", lang, "-ind-diff.xlsx")
+  psy <- read_excel(filename) %>% 
+    dplyr::select(subj, cft, lextale) %>%
+    mutate(
+      subj = as.character(subj),
+      cft  = suppressWarnings(parse_number(as.character(cft)))
+    ) %>%
+    mutate(language = lang)
+  
+  meco_psy <- bind_rows(meco_psy, psy)
+}
+
+meco_psy
+
+meco_profile <- meco_df %>% 
+  left_join(meco_psy, by = c("language", "subj")) %>%
+  drop_na()
+
+View(meco_profile)
+```
+
+```{r}
+langs <- c("du", "en", "fi", "ge", "gr", "he", "it", "sp", "ko", "tr", "ru")
+tmp <- meco_profile %>%
+  filter(language == "ru")
+
+cor.test(tmp$r_prev_len, tmp$lextale)
+cor.test(tmp$r_prev_len, tmp$cft)
+cor.test(tmp$r_prev_len, tmp$skip)
+cor.test(tmp$r_prev_len, tmp$FPReg)
+print("------------------------------------")
+cor.test(tmp$r_prev_freq, tmp$lextale)
+cor.test(tmp$r_prev_freq, tmp$cft)
+cor.test(tmp$r_prev_freq, tmp$skip)
+cor.test(tmp$r_prev_freq, tmp$FPReg)
+print("------------------------------------")
+cor.test(tmp$r_prev_surp, tmp$lextale)
+cor.test(tmp$r_prev_surp, tmp$cft)
+cor.test(tmp$r_prev_surp, tmp$skip)
+cor.test(tmp$r_prev_surp, tmp$FPReg)
+
+```
+
+
+
+```{r}
+predictors <- c("r_prev_len", "r_prev_freq", "r_prev_surp")
+psy_vars <- colnames(indico_profile)[8:35]
+
+# Calculate correlations
+cor <- expand_grid(
+  predictor = predictors,
+  measure = psy_vars
+) %>%
+  mutate(
+    cor_test = map2(predictor, measure, ~ cor.test(indico_profile[[.x]], indico_profile[[.y]], use = "complete.obs"))
+  ) %>%
+  mutate(
+    correlation = map_dbl(cor_test, ~ .x$estimate),
+    p = map_dbl(cor_test, ~ .x$p.value)
+  ) %>%
+  mutate(
+    sig = case_when(
+      p <= 0.001 ~ "***",
+      p <= 0.01  ~ "**",
+      p <= 0.05  ~ "*",
+      p <= 0.1   ~ "",
+      TRUE             ~ ""
+      )
+  ) %>%
+  dplyr::select(predictor, measure, correlation, p, sig)
+
+View(cor)
+```
+
+
+
+
+
+```{r}
+# Define target vectors
+targets_len_c1 <- c("r_int", "r_len", "FPReg_c1", "skip_c1", "FPReg_all", "skip_all")
+targets_len_c2 <- c("r_int", "r_len",  "FPReg_c2", "skip_c2", "FPReg_all", "skip_all")
+targets_freq_c1 <- c("r_int", "r_freq", "FPReg_c1", "skip_c1", "FPReg_all", "skip_all")
+targets_freq_c2 <- c("r_int", "r_freq", "FPReg_c2", "skip_c2", "FPReg_all", "skip_all")
+targets_surp_c1 <- c("r_int", "r_surp", "FPReg_c1", "skip_c1", "FPReg_all", "skip_all")
+targets_surp_c2 <- c("r_int", "r_surp", "FPReg_c2", "skip_c2", "FPReg_all", "skip_all")
+
+
+
+# Define all predictor-target sets
+predictor_target_list <- list(
+  r_prev_len_c1   = targets_len_c1,
+  r_prev_freq_c1  = targets_freq_c1,
+  r_prev_surp_c1  = targets_surp_c1,
+  r_prev_len_c2   = targets_len_c2,
+  r_prev_freq_c2  = targets_freq_c2,
+  r_prev_surp_c2  = targets_surp_c2
+)
+
+# Flexible correlation calculator
+get_all_corrs <- function(df, predictor_target_list) {
+  map_dfr(names(predictor_target_list), function(predictor) {
+    targets <- predictor_target_list[[predictor]]
+    map_dfr(targets, function(target) {
+      test <- cor.test(df[[predictor]], df[[target]])
+      tibble(
+        predictor = predictor,
+        target = target,
+        pair = paste(predictor, target, sep = "_"),
+        correlation = test$estimate,
+        p_value = test$p.value
+      )
+    })
+  })
+}
+
+# Compute correlations per mode
+cor_results <- subj_df %>%
+  group_by(mode) %>%
+  group_map(~ {
+    df_mode <- .x
+    mode_name <- .y$mode
+
+    cor_table <- get_all_corrs(df_mode, predictor_target_list)
+
+    cor_table %>%
+      mutate(
+        mode = mode_name,
+        sig = case_when(
+          p_value <= 0.001 ~ "***",
+          p_value <= 0.01  ~ "**",
+          p_value <= 0.05  ~ "*",
+          p_value <= 0.1   ~ ".",
+          TRUE             ~ ""
+        )
+      )
+  }) %>%
+  bind_rows()
+
+View(cor_results )
+```
+
+
+
+```{r}
+data <- df %>%
+  filter(mode == "potec")
+View(data)
+```
+
+```{r}
+df <- read.csv("../results/stats/participants_random_effects_scaled.csv") %>%
+  filter(mode == "potec")
+View(df)
+
+inv_logit <- function(x) 1/(1+exp(-x))
+fit_skip <- read_rds("../models/test/potec_skip.rds")
+fit_reg <- read_rds("../models/test/potec_regr.rds")
+
+# ---- Skip BLUPs
+coef_skip <- coef(fit_skip)$subj_id   # array: [n_subj, coef, stats]
+# take posterior means:
+sk_est <- as.data.frame(coef_skip[,"Estimate",])
+sk_est$subj_id <- rownames(coef_skip)
+# View(sk_est)
+# For each subject, predicted logit at c2=0 and c2=1 (other predictors at 0)
+skip_blup <- sk_est %>%
+  transmute(
+    subj_id,
+    eta_c2_0 = `Intercept`,                 # c2 = 0
+    eta_c2_1 = `Intercept` + `c2`           # c2 = 1
+  ) %>%
+  pivot_longer(cols = c(eta_c2_0, eta_c2_1),
+                      names_to = "c2_label", values_to = "eta") %>%
+  mutate(c2 = ifelse(c2_label == "eta_c2_1", 1L, 0L),
+         blup_skip = inv_logit(eta)) %>%
+  dplyr::select(subj_id, c2, blup_skip) %>%
+  mutate(
+    subj_id = as.integer(subj_id),
+    c2 = as.integer(c2)
+  ) %>%
+  group_by(c2) %>%
+  mutate(
+    blup_skip  = as.numeric(scale(blup_skip))
+  ) %>%
+  ungroup() %>%
+  mutate(c2_label = ifelse(c2 == 0, "blup_skip_c1", "blup_skip_c2")) %>%
+  dplyr::select(subj_id, c2_label, blup_skip) %>%
+  tidyr::pivot_wider(
+    names_from = c2_label,
+    values_from = blup_skip
+  )
+
+View(skip_blup)
+
+# ---- FPReg BLUPs
+coef_reg <- coef(fit_reg)$subj_id
+rg_est <- as.data.frame(coef_reg[, "Estimate",])
+rg_est$subj_id <- rownames(coef_reg)
+
+reg_blup <- rg_est %>%
+  transmute(
+    subj_id,
+    eta_c2_0 = `Intercept`,
+    eta_c2_1 = `Intercept` + `c2`
+  ) %>%
+  tidyr::pivot_longer(cols = c(eta_c2_0, eta_c2_1),
+                      names_to = "c2_label", values_to = "eta") %>%
+  mutate(c2 = ifelse(c2_label == "eta_c2_1", 1L, 0L),
+         blup_regr = inv_logit(eta)) %>%
+  dplyr::select(subj_id, c2, blup_regr) %>%
+  mutate(
+    subj_id = as.integer(subj_id),
+    c2 = as.integer(c2)
+  ) %>%
+  group_by(c2) %>%
+  mutate(
+    blup_regr  = as.numeric(scale(blup_regr))
+  ) %>%
+  ungroup() %>%
+    mutate(c2_label = ifelse(c2 == 0, "blup_regr_c1", "blup_regr_c2")) %>%
+  dplyr::select(subj_id, c2_label, blup_regr) %>%
+  tidyr::pivot_wider(
+    names_from = c2_label,
+    values_from = blup_regr
+  )
+
+potec_temp <- df %>%
+  left_join(skip_blup, by = c("subj_id")) %>%
+  left_join(reg_blup,  by = c("subj_id"))
+```
+
+```{r}
+cor.test(potec_temp$r_prev_len_c1, potec_temp$blup_skip_c1)
+cor.test(potec_temp$r_prev_freq_c1, potec_temp$blup_skip_c1)
+cor.test(potec_temp$r_prev_surp_c1, potec_temp$blup_skip_c1)
+
+cor.test(potec_temp$r_prev_len_c2, potec_temp$blup_skip_c2)
+cor.test(potec_temp$r_prev_freq_c2, potec_temp$blup_skip_c2)
+cor.test(potec_temp$r_prev_surp_c2, potec_temp$blup_skip_c2)
+
+cor.test(potec_temp$r_prev_len_c1, potec_temp$blup_regr_c1)
+cor.test(potec_temp$r_prev_freq_c1, potec_temp$blup_regr_c1)
+cor.test(potec_temp$r_prev_surp_c1, potec_temp$blup_regr_c1)
+
+cor.test(potec_temp$r_prev_len_c2, potec_temp$blup_regr_c2)
+cor.test(potec_temp$r_prev_freq_c2, potec_temp$blup_regr_c2)
+cor.test(potec_temp$r_prev_surp_c2, potec_temp$blup_regr_c2)
+```
+
+
+
+

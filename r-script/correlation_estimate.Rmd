@@ -12,7 +12,6 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
 ```
 
-
 ```{r Libraries, warning=FALSE, message=FALSE}
 # Set locale to English
 Sys.setlocale("LC_ALL", "en_US.UTF-8")
@@ -33,9 +32,6 @@ library(brms)
 library(rstan)
 library(cmdstanr)
 ```
-
-
-We recommend to run these models on a cluster. Each model, especially the geco and indico ones can take more than 2 weeks to run!
 
 # PoTec -- cross domain reliability
 ```{r Read Potec Data}
@@ -89,7 +85,8 @@ potec <- read.csv("../data/potec/potec_expertise.csv", header=TRUE) %>%
 
 # View(potec)
 
-# write_csv(potec, "../data/fit_input/potec.csv")
+write_csv(potec, "../data/fit_input/potec.csv")
+# write_ipc_file(potec, "../data/fit_input_arrow/potec.arrow")
 ```
 
 
@@ -100,7 +97,7 @@ priors_rt <- c(
   prior(normal(0, 0.1), class = b),
   prior(exponential(2), class = sd),
   prior(exponential(2), class = sigma),
-  prior(lkj(2), class = cor)
+  prior(lkj(1), class = cor)
 )
 
 for(mes in c("gaze_duration")) {
@@ -185,7 +182,8 @@ onestop <- read.csv("../data/onestop/onestop_repeat.csv", header=TRUE) %>%
   drop_na()
 
 # View(onestop)
-# write_csv(onestop, "../data/fit_input/onestop.csv")
+write_csv(onestop, "../data/fit_input/onestop.csv")
+# write_ipc_file(onestop, "../data/fit_input_arrow/onestop.arrow")
 
 ```
 
@@ -476,7 +474,7 @@ priors_rt <- c(
   prior(normal(0, 0.1), class = b),
   prior(exponential(2), class = sd),
   prior(exponential(2), class = sigma),
-  prior(lkj(2), class = cor)
+  prior(lkj(1), class = cor)
 )
 
 for(mes in c("gaze_duration")) {
@@ -490,6 +488,7 @@ for(mes in c("gaze_duration")) {
   model <- brms::brm(
     value ~ 1 + c2 + len + freq + surp + prev_len + prev_freq + prev_surp +
     (0 + c1 + c2 + (len + freq + surp + prev_len + prev_freq + prev_surp):c1 + (len + freq + surp + prev_len + prev_freq + prev_surp):c2 | subj_id),
+    # value ~ 1 + c2 + len + freq + surp + prev_len + prev_freq + prev_surp + (1 + c2 + len + freq + surp + prev_len + prev_freq + prev_surp | subj_id), 
     data = temp_df,
     chains = 4,
     family = lognormal(),
@@ -497,7 +496,7 @@ for(mes in c("gaze_duration")) {
     iter = 2000,
     file = paste0("../models/cor_scaled/", "gecozh_", mes),
     cores = 4,
-    backend = "rstan",
+    backend = "cmdstan",
     silent = 0,
     prior = priors_rt
   )
@@ -628,7 +627,7 @@ for(mes in c("gaze_duration")) {
     iter = 2000,
     file = paste0("../models/cor_scaled/", "geconl_", mes),
     cores = 4,
-    backend = "rstan",
+    backend = "cmdstan",
     silent = 0,
     prior = priors_rt
   )
@@ -639,24 +638,42 @@ print("Done fitting models")
 
 
 ## Indico-cross session
-```{r Prepare InDiCo Data}
+```{r}
 measures_col <- c("gaze_duration", "first_fixation", "total_duration", "go_past_time", "FPReg", "skip", "FPSkip")
 
 et_indico <- read.csv("../data/indico/indico_et.csv") %>%
   ## The Potsdam data need to be checked, we used the Zurich part
   filter(str_starts(subj_id, "zh")) %>%
   mutate(word_id = as.integer(word_id), FPSkip = ifelse(FPRT == 0, 1, 0), skip = ifelse(TFT == 0, 1, 0)) %>%
-  dplyr::select(subj_id, text_id, screen_id, session_label, word_id, word, FPRT, FD, TFT, RPD_inc, FPReg, FPSkip, skip, word_length, word_length_word_n_minus_1, lex_freq, lex_freq_word_n_minus_1, surprisal, surprisal_word_n_minus_1) %>%
-  rename(subj = subj_id,  trial = screen_id, gaze_duration = FPRT, first_fixation = FD, total_duration = TFT, go_past_time = RPD_inc, len = word_length, prev_len = word_length_word_n_minus_1, freq = lex_freq, prev_freq = lex_freq_word_n_minus_1, surp = surprisal, prev_surp = surprisal_word_n_minus_1) %>%
+  dplyr::select(subj_id, text_id, screen_id, session_label, word_id, word, FPRT, FD, TFT, RPD_inc, FPReg, FPSkip, skip, word_length, lex_freq, surprisal_gpt_avg) %>%
+  rename(subj = subj_id,  trial = screen_id, gaze_duration = FPRT, first_fixation = FD, total_duration = TFT, go_past_time = RPD_inc, len = word_length, surp = surprisal_gpt_avg) %>%
+  mutate(zipf_freq = log10(lex_freq + 1) + 3) %>%
+  rename(freq = zipf_freq) %>%
+  mutate(subj_id = as.integer(factor(subj))) %>%
+  group_by(subj_id, session_label, trial, text_id) %>%
+  arrange(word_id, .by_group = TRUE) %>%
+  mutate(
+    prev_len = lag(len),
+    prev_freq = lag(freq),
+    prev_surp = lag(surp)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    len = as.numeric(scale(len)),
+    freq = as.numeric(scale(freq)),
+    surp = as.numeric(scale(surp)),
+    prev_len = as.numeric(scale(prev_len)),
+    prev_freq = as.numeric(scale(prev_freq)),
+    prev_surp = as.numeric(scale(prev_surp))
+  ) %>%
   gather(key = "measures", value = "value", all_of(measures_col)) %>%
   group_by(measures) %>%
   mutate(mean = mean(value, na.rm = TRUE),
          sd = sd(value, na.rm = TRUE)) %>%
   filter((measures %in% c("FPReg", "skip", "FPSkip")) | value <= (mean + 5 * sd)) %>%
   ungroup() %>%
-  dplyr::select(-mean, -sd) %>%
+  dplyr::select(-mean, -sd, -lex_freq) %>%
   mutate(
-    subj_id = as.integer(factor(subj)),
     c1 = ifelse(session_label == "ET1", 1, 0),
     c2 = ifelse(session_label == "ET2", 1, 0)
     ) %>%
@@ -665,9 +682,10 @@ et_indico <- read.csv("../data/indico/indico_et.csv") %>%
 # View(et_indico)
 # 
 # write_csv(et_indico, "../data/fit_input/et_indico.csv")
+write_ipc_file(et_indico, "../data/fit_input_arrow/et_indico.arrow")
 ```
 
-```{r Model InDiCo Data}
+```{r Run Model on InDiCo}
 priors_rt <- c(
   prior(normal(5.5, 0.1), class = Intercept),
   prior(normal(0, 0.1), class = b),
@@ -694,12 +712,10 @@ for(mes in c("gaze_duration")) {
     iter = 2000,
     file = paste0("../models/cor_scaled/", "indicos_", mes),
     cores = 4,
-    backend = "rstan",
+    backend = "cmdstan",
     silent = 0,
     prior = priors_rt
   )
 }
-
 print("Done fitting models")
 ```
-

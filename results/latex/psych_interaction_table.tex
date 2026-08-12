@@ -4,20 +4,22 @@
 \setlength{\tabcolsep}{6pt}
 \renewcommand{\arraystretch}{1.2}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Interaction b/w} & \textbf{Reading Fluency} & \textbf{Working Memory} & \textbf{Intelligence} & \textbf{Cognitive Control} \\
+\textbf{Interaction b/w} & \textbf{Reading Fluency} & \textbf{Working Memory} & \textbf{Cognitive Control} \\
 \midrule
-Previous Word Len. & \sigestci{-0.006}{-0.009}{-0.004} & \nonsigestci{-0.002}{-0.004}{0.000} & \sigestci{0.002}{0.001}{0.004} & \nonsigestci{0.004}{0.000}{0.008}
- \\
-Previous Lex. Freq. & \sigestci{0.004}{0.002}{0.007} & \nonsigestci{-0.001}{-0.003}{0.001} & \nonsigestci{0.001}{-0.001}{0.002} & \nonsigestci{0.003}{-0.001}{0.007}
- \\
-Previous Surprisal & \sigestci{0.003}{0.001}{0.005} & \nonsigestci{-0.001}{-0.002}{0.001} & \nonsigestci{-0.000}{-0.001}{0.001} & \nonsigestci{0.002}{-0.001}{0.005}
- \\
+Current Word Len. & \nonsigestci{-0.010}{-0.020}{0.000}\textsuperscript{\(\diamond\)} & \sigestci{-0.009}{-0.018}{-0.000}\textsuperscript{\(\diamond\)} & \nonsigestci{0.003}{-0.011}{0.017} \\
+Current Lex. Freq. & \nonsigestci{0.005}{-0.000}{0.010}\textsuperscript{\(\diamond\)} & \nonsigestci{0.003}{-0.002}{0.007} & \nonsigestci{-0.004}{-0.011}{0.003} \\
+Current Surprisal & \sigestci{-0.003}{-0.006}{-0.000}\textsuperscript{\(\diamond\)} & \nonsigestci{0.000}{-0.002}{0.003} & \nonsigestci{-0.002}{-0.006}{0.003} \\
+\midrule
+Previous Word Len. & \nonsigestci{-0.004}{-0.010}{0.002} & \nonsigestci{-0.001}{-0.006}{0.004} & \nonsigestci{0.006}{-0.003}{0.014} \\
+Previous Lex. Freq. & \sigestci{0.006}{0.002}{0.010}\textsuperscript{\(\diamond\)} & \nonsigestci{-0.001}{-0.005}{0.002} & \nonsigestci{0.001}{-0.005}{0.007} \\
+Previous Surprisal & \sigestci{0.003}{0.001}{0.006}\textsuperscript{\(\diamond\)} & \nonsigestci{-0.001}{-0.004}{0.001} & \nonsigestci{-0.003}{-0.006}{0.001} \\
 \bottomrule
 \end{tabular}
 }% end resizebox
 }% end scriptsize
-\caption{Interaction coefficients}
-\label{tab:psych_spillvoer_interaction}
+\caption{Posterior means and credible intervals for interaction effects between cognitive abilities and current-word and spillover predictors, including word length, lexical frequency, and surprisal. Estimates are reported on the log reading-time scale (natural
+logarithms). Boldface indicates estimates whose 95\% credible intervals exclude zero; a superscript diamond (\(\diamond\)) indicates estimates whose 89\% credible intervals exclude zero.}
+\label{tab:psych_word_interactions}
 \end{table}

@@ -185,3 +185,93 @@ ggsave(filename = paste0("../visualization/paper/reliability/by-subject_indico_s
 )
 ```
 
+
+## Try colored plot
+```{r}
+m <- read_rds("../models/cor_scaled/indicos_gaze_duration.rds")
+
+evidence_colors <- c(
+  "Negative: 95%" = "#9C2F00",  # dark vermillion
+  "Negative: 89%" = "#E66101",  # medium vermillion
+  "Other"         = "#737373",  # neutral grey
+  "Positive: 89%" = "#2389B9",  # medium blue
+  "Positive: 95%" = "#005A8D"   # dark blue
+)
+
+plot_individual_effect <- function(model, term, effect_label, panel_label, filename) {
+  probs <- c(.025, .055, .945, .975)
+  population_effect <- brms::fixef(model, probs = probs)[term, "Estimate"]
+  subject_effects <- brms::ranef(model, probs = probs)[["subj_id"]]
+  subject_ids <- dimnames(subject_effects)[[1]]
+  plot_df <- map_dfr(
+    c("c1", "c2"),
+    function(con) {
+      coef_name <- paste0(con, ":", term)
+      tibble(
+        subject = subject_ids,
+        contrast = con,
+        spmu = subject_effects[, "Estimate", coef_name] + population_effect,
+        splo95 = subject_effects[, "Q2.5", coef_name] + population_effect,
+        splo89 = subject_effects[, "Q5.5", coef_name] + population_effect,
+        spup89 = subject_effects[, "Q94.5", coef_name] + population_effect,
+        spup95 = subject_effects[, "Q97.5",coef_name] + population_effect)}) %>%
+    mutate(contrast = factor(contrast, levels = c("c1", "c2"), labels = c("Session 1", "Session 2")), 
+           evidence = case_when(spup95 < 0 ~ "Negative: 95%", spup89 < 0 ~ "Negative: 89%", splo95 > 0 ~ "Positive: 95%", splo89 > 0 ~ "Positive: 89%", TRUE ~ "Other"),
+           evidence = factor(evidence, levels = names(evidence_colors)))
+  subject_order <- plot_df %>% filter(contrast == "Session 1") %>% arrange(spmu) %>% pull(subject)
+  
+  plot_df <- plot_df %>% mutate(subject = factor(subject, levels = subject_order))
+  summary_df <- plot_df %>% group_by(contrast) %>%
+    summarise(mean = mean(spmu, na.rm = TRUE), lq= mean(splo95, na.rm = TRUE), 
+              hq = mean(spup95, na.rm = TRUE), .groups = "drop")
+
+  p <- ggplot(plot_df, aes(x = spmu, xmin = splo95, xmax = spup95, y = subject, color = evidence)) +
+    geom_errorbarh(height = 0.3, linewidth = 0.5, alpha = 0.85) +
+    geom_point(size = 1.3) +
+    geom_vline(xintercept = 0, color = "grey25", linetype = "dotted", linewidth = 0.4) +
+    geom_vline(data = summary_df, aes(xintercept = mean), inherit.aes = FALSE, linewidth = 0.4) +
+    geom_vline(data = summary_df, aes(xintercept = lq), inherit.aes = FALSE, linetype = "dashed", linewidth = 0.3) +
+    geom_vline(data = summary_df, aes(xintercept = hq), inherit.aes = FALSE, linetype = "dashed", linewidth = 0.3) +
+    facet_grid(. ~ contrast) +
+    scale_color_manual(values = evidence_colors, drop = FALSE,
+                       labels = c("Negative, 95% interval excludes zero",
+                                  "Negative, 89% interval excludes zero",
+                                  "Interval includes zero",
+                                  "Positive, 89% interval excludes zero",
+                                  "Positive, 95% interval excludes zero")) +
+    labs(x = paste0("(", panel_label, ") Participant-level ", effect_label, " Spillover effect in InDiCo"), y = "Participant ID", color = NULL) +
+    guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "none", legend.text = element_text(size = 8),
+          panel.grid.major.x = element_line(linewidth = 0.2, colour = "grey85"),
+          panel.grid.major.y = element_line(linewidth = 0.2, colour = "grey90"),
+          panel.grid.minor = element_blank(), 
+          panel.border = element_rect(colour = "grey70", fill = NA, linewidth = 0.4),
+          strip.text = element_text(face = "bold"), strip.background = element_blank(),
+          panel.spacing.x = unit(2, "pt"), 
+          axis.text.y = element_text(size = 9), axis.title.x = element_text(margin = margin(t = 10)))
+
+  ggsave(filename, p, width = 5.5, height = 8, dpi = 300)
+  p
+}
+```
+
+```{r}
+p_len <- plot_individual_effect(
+  model = m,
+  term = "prev_len",
+  effect_label = "Word Length",
+  panel_label = "a",
+  filename = paste0("../visualization/paper/reliability/", "by-subject_indico_len_colored.pdf"))
+
+p_surp <- plot_individual_effect(
+  model = m,
+  term = "prev_surp",
+  effect_label = "Surprisal",
+  panel_label = "b",
+  filename = paste0("../visualization/paper/reliability/", "by-subject_indico_surp_colored.pdf"))
+
+p_len
+p_surp
+```
+
