@@ -58,13 +58,13 @@ indico_rt_profile <- read.csv("../data/fit_input/et_indico.csv") %>%
   left_join(indico_psy, by = "subj") %>%
   drop_na()
   
-View(indico_rt_profile)
+# View(indico_rt_profile)
 
 # write_ipc_file(indico_rt_profile, "../data/fit_input_arrow/indico_incl_profile.arrow")
 ```
 
 
-```{r model: full raneff & full interaction}
+```{r model: full raneff & full interaction, eval=FALSE}
 priors_rt <- c(
   prior(normal(5.5, 0.1), class = Intercept),
   prior(normal(0, 0.1), class = b),
@@ -100,12 +100,13 @@ print("Done fitting models")
 ```
 
 
-```{r}
-m <- read_rds("../models/psycho-profile/indico_profile_log_rt_full_int_full_raneff_6000iter_bayes.rds")
+```{r read model}
+m <- read_rds("../models/psycho-profile/indico_profile_log_rt_full_int_full_raneff.rds")
 summary(m)
 ```
 
-```{r}
+
+```{r interaction_df}
 temp_df <- indico_rt_profile %>% filter( measures == "gaze_duration", value > 0)
 
 profiles <- c("reading", "memory", "cogcontr")
@@ -177,14 +178,9 @@ make_interaction_plot <- function(interaction_df, profile, effects, plot_type = 
       profile_level = {
         vals <- .data[[profile]]
         lvls <- sort(unique(vals))
-
         if (length(lvls) == 5) {
           factor(vals, levels = lvls, labels = c("-2 SD", "-1 SD", "Mean", "+1 SD", "+2 SD"))
-        } else {
-          factor(vals)
-        }
-      }
-    )
+        } else { factor(vals)}})
 
   ggplot(dfp, aes(x = x, y = estimate, color = profile_level, fill = profile_level, group = profile_level)) +
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.15, color = NA) +
@@ -242,151 +238,33 @@ for (profile in profiles) {
   p_spillover <- make_interaction_plot(interaction_df = interaction_df, profile = profile,
                                        effects = spillover_effects, plot_type = "spillover")
   spillover_outfile <- paste0("../visualization/paper/psych/interaction_spillover_", profile, ".png")
+  # spillover_outfile
   ggsave(filename = spillover_outfile, plot = p_spillover, width = 8, height = 3, dpi = 300)
   message("Saved: ", spillover_outfile)
 }
 
 ```
 
-
-```{r}
-spillovers <- c("prev_len", "prev_freq", "prev_surp")
-profiles   <- c("reading", "memory", "intelligence", "cogcontr")
-
-# Updated facet labels
-profile_labels <- c(
-  reading = "Reading Fluency",
-  memory = "Working Memory",
-  intelligence = "Intelligence",
-  cogcontr = "Cognitive Control"
-)
-
-spill_labels <- c(
-  prev_len  = "Standardized Previous Word Length",
-  prev_freq = "Standardized Previous Word Frequency",
-  prev_surp = "Standardized Previous Word Surprisal"
-)
-
-# Exact x-axis text requested (uses “Lexical Frequency” and the en dash minus n−1)
-spill_xlab <- c(
-  prev_len  = "Standardized Previous Word Length",
-  prev_freq = "Standardized Previous Lexical Frequency",
-  prev_surp = "Standardized Previous Surprisal"
-)
-
-for (spill in spillovers) {
-  dfs <- interaction_df %>%
-    filter(spillover_var == spill) %>%
-    mutate(
-      profile_var = factor(profile_var, levels = profiles),
-      x = case_when(
-        spillover_var == "prev_len"  ~ prev_len,
-        spillover_var == "prev_freq" ~ prev_freq,
-        spillover_var == "prev_surp" ~ prev_surp,
-        TRUE ~ NA_real_
-      )
-    ) %>%
-    group_by(profile_var) %>%
-    mutate(
-      vals = case_when(
-        profile_var == "reading"      ~ reading,
-        profile_var == "memory"       ~ memory,
-        profile_var == "intelligence" ~ intelligence,
-        profile_var == "cogcontr"     ~ cogcontr,
-        TRUE ~ NA_real_
-      ),
-      profile_level = {
-        lvls <- sort(unique(vals))
-        if (length(lvls) == 5) {
-          factor(vals, levels = lvls,
-                 labels = c("-2 SD","-1 SD","Mean","+1 SD","+2 SD"))
-        } else {
-          factor(vals)
-        }
-      }
-    ) %>%
-    ungroup()
-
-  p <- ggplot(dfs, aes(x = x, y = estimate, color = profile_level, fill = profile_level)) +
-    geom_line(linewidth = 0.9) +
-    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.15, color = NA) +
-    facet_wrap(
-      ~ profile_var, nrow = 1, scales = "free_x",
-      labeller = labeller(profile_var = profile_labels)
-    ) +
-    labs(
-      x = spill_xlab[[spill]],
-      y = "Log Gaze Duration"
-      # no title
-    ) +
-    theme_light() +
-    theme(
-      legend.position = "none",
-      strip.text = element_text(size = 10, color = "black"),  # Increase facet label size
-      strip.background = element_rect(fill = "gray85", color = "black", linewidth = 0.4)
-      )
-
-  outfile <- paste0("../visualization/paper/psych2/interaction_", spill, ".pdf")
-  ggsave(filename = outfile, plot = p, width = 8, height = 3, dpi = 300)
-  message("Saved: ", outfile)
-}
-```
-
 ## Bayes Factor analysis
-```{r}
+```{r Run model 1, eval=FALSE}
+## including or not including correlations do not really affect the results
 model_formula <- bf(
   log_value ~
-    1 +
-    (len + freq + surp + prev_len + prev_freq + prev_surp) *
-      (memory + reading + cogcontr) +
+    1 + (len + freq + surp + prev_len + prev_freq + prev_surp) * (memory + reading + cogcontr) +
     (1 + len + freq + surp + prev_len + prev_freq + prev_surp || subj_id) +
-    (1 | text_id)
-)
+    (1 | text_id))
 
 temp_df <- indico_rt_profile %>% filter( measures == "gaze_duration", value > 0) %>% mutate(log_value = log(value))
-  
-
-prior_table <- get_prior(
-  formula = model_formula,
-  data = temp_df,
-  family = gaussian()
-)
-
-b_terms <- prior_table$coef[
-  prior_table$class == "b" &
-    prior_table$coef != ""
-]
-
+prior_table <- get_prior(formula = model_formula, data = temp_df, family = gaussian())
+b_terms <- prior_table$coef[prior_table$class == "b" & prior_table$coef != ""]
 interaction_terms <- b_terms[grepl(":", b_terms)]
 main_effect_terms <- setdiff(b_terms, interaction_terms)
-
-main_effect_priors <- do.call(
-  c,
-  lapply(
-    main_effect_terms,
-    function(term) {
-      set_prior(
-        "normal(0, 0.1)",
-        class = "b",
-        coef = term
-      )
-    }
-  )
-)
-
-interaction_priors <- do.call(
-  c,
-  lapply(
-    interaction_terms,
-    function(term) {
-      set_prior(
-        "normal(0, 0.01)",
-        class = "b",
-        coef = term
-      )
-    }
-  )
-)
+main_effect_priors <- do.call(c, 
+                              lapply(main_effect_terms, 
+                                     function(term) {set_prior("normal(0, 0.1)", class = "b", coef = term)}))
+interaction_priors <- do.call(c,
+  lapply(interaction_terms,
+         function(term) {set_prior("normal(0, 0.01)", class = "b", coef = term)}))
 
 priors_rt <- c(
   prior(normal(5.5, 0.1), class = Intercept),
@@ -420,60 +298,22 @@ model_sd <- brms::brm(
 print("Done fitting models")
 ```
 
-```{r}
+```{r Run model 2, eval=FALSE}
 model_formula <- bf(
-  log_value ~
-    1 +
-    (len + freq + surp + prev_len + prev_freq + prev_surp) *
-      (memory + reading + cogcontr) +
+  log_value ~ 1 +(len + freq + surp + prev_len + prev_freq + prev_surp) * (memory + reading + cogcontr) +
     (1 + len + freq + surp + prev_len + prev_freq + prev_surp || subj_id) +
     (1 | text_id)
-)
+  )
 
 temp_df <- indico_rt_profile %>% filter( measures == "gaze_duration", value > 0) %>% mutate(log_value = log(value))
-
-prior_table <- get_prior(
-  formula = model_formula,
-  data = temp_df,
-  family = gaussian()
-)
-
-b_terms <- prior_table$coef[
-  prior_table$class == "b" &
-    prior_table$coef != ""
-]
-
+prior_table <- get_prior(formula = model_formula, data = temp_df, family = gaussian())
+b_terms <- prior_table$coef[prior_table$class == "b" & prior_table$coef != ""]
 interaction_terms <- b_terms[grepl(":", b_terms)]
 main_effect_terms <- setdiff(b_terms, interaction_terms)
-
-main_effect_priors <- do.call(
-  c,
-  lapply(
-    main_effect_terms,
-    function(term) {
-      set_prior(
-        "normal(0, 0.1)",
-        class = "b",
-        coef = term
-      )
-    }
-  )
-)
-
-interaction_priors <- do.call(
-  c,
-  lapply(
-    interaction_terms,
-    function(term) {
-      set_prior(
-        "normal(0, 0.05)",
-        class = "b",
-        coef = term
-      )
-    }
-  )
-)
-
+main_effect_priors <- do.call(c, lapply(main_effect_terms, 
+                                        function(term) {set_prior("normal(0, 0.1)", class = "b", coef = term)}))
+interaction_priors <- do.call(c, lapply(interaction_terms, 
+                                        function(term) {set_prior("normal(0, 0.05)", class = "b", coef = term)}))
 priors_rt <- c(
   prior(normal(5.5, 0.1), class = Intercept),
   main_effect_priors,
@@ -507,20 +347,19 @@ print("Done fitting models")
 ```
 
 
-```{r}
+```{r Read Models}
 m01.bayes <- read_rds("../models/psycho-profile/bayes_factor/indico_profile_bayes_full_dot01.rds")
 m05.bayes <- read_rds("../models/psycho-profile/bayes_factor/indico_profile_bayes_full_dot05.rds")
 m1.bayes <- read_rds("../models/psycho-profile/bayes_factor/indico_profile_bayes_full_dot1.rds")
 ```
 
-```{r}
+```{r compile results, eval=FALSE}
+## this block takes time to run
 models <- list(m01 = m01.bayes, m05 = m05.bayes, m1 = m1.bayes)
-
 prior_sds <- c(m01 = 0.01, m05 = 0.05, m1  = 0.1)
-
 parameters <- c("len:reading", "freq:reading", "surp:reading", "prev_len:reading", "prev_freq:reading", "prev_surp:reading")
 
-# Direction for the one-sided test of each parameter
+##direction for the one-sided test of each parameter
 directions <- c("len:reading"= -1, "freq:reading" =  1, "surp:reading" = -1,
                 "prev_len:reading" = -1, "prev_freq:reading" =1, "prev_surp:reading" =  1)
 
@@ -530,9 +369,7 @@ get_bf <- function(fit, parameter, direction, test) {
   res <- res %>% filter(sub("^b_", "", Parameter) == parameter) %>%
     mutate(BF = exp(as.numeric(log_BF)), test = test) %>%
     dplyr::select(-log_BF)
-  res
-  }
-
+  res}
 
 bf_results <- imap_dfr(models, function(fit, model_name) {
     map_dfr(parameters, function(parameter) {
@@ -548,7 +385,7 @@ bf_results
 # write.csv(bf_results, "../results/stats/bayes_factor_fixed.csv", row.names = FALSE)
 ```
 
-```{r Plot Bayes Factor}
+```{r Plot Bayes Factor Prep}
 bf.fix <- read.csv("../results/stats/bayes_factor_fixed.csv") %>%
   rename(Interaction = Parameter, Direction = test) %>%
   mutate(prior_sd = factor(prior_sd, levels = c(0.10, 0.05, 0.01)),
@@ -566,7 +403,7 @@ bf.fix <- read.csv("../results/stats/bayes_factor_fixed.csv") %>%
 bf.fix
 ```
 
-```{r}
+```{r Plot Bayes Factor}
 p_bf <- ggplot(bf.fix, aes(x = prior_sd, y = BF, group = Interaction, color = Interaction)) +
   geom_line(linewidth = 1) +
   geom_point(size = 2.5) +

@@ -70,7 +70,7 @@ indi <- as.data.frame(ran_subj[, , 1:14]) %>%
     names_to   = c(".value", "contrast"),
     names_pattern = "(sp..)_len_(c[12])"
   ) %>%
-  mutate(contrast = factor(contrast, levels = c("c1", "c2"), labels = c("Session 1", "Session 2")))
+  mutate(contrast = factor(contrast, levels = c("c1", "c2"), labels = c("Session 1", "Session 2"))) %>%
   dplyr::select(subject, contrast, spmu, splo, spup)
 
 View(indi)
@@ -78,8 +78,8 @@ View(indi)
 sum_indi <- indi %>%
   dplyr::group_by(contrast) %>%
   dplyr::summarize(mean = mean(spmu),
-                   lq   = mean(splo),
-                   hq   = mean(spup),
+                   lq = mean(splo),
+                   hq = mean(spup),
                    .groups = "drop")
 sum_indi
 ```

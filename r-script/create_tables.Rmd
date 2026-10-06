@@ -1,7 +1,7 @@
 ---
 title: "Create-Latex-Table"
 output: html_document
-date: "2024-08-18"
+date: "2025-10-18"
 ---
 
 ```{r setup, include=FALSE}
@@ -25,6 +25,7 @@ library(lmerTest)
 library(glmmTMB)
 library(MASS)
 library(brms)
+library(rstan)
 library(mirt)
 library(gtable)
 library(cowplot)

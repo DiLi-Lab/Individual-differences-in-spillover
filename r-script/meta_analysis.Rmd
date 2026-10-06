@@ -49,7 +49,7 @@ potec <- read_csv("../data/fit_input/potec.csv") %>%
          subj = paste0("ptc", sub("^s", "", subj))) %>% dplyr::select(-text)
 # View(potec)
 
-onestop <- read_csv("../data/fit_input/onestop_zipf.csv") %>%
+onestop <- read_csv("../data/fit_input/onestop.csv") %>%
   filter(measures == "gaze_duration", value > 0) %>%
   dplyr::select(-trial, -paragraph, -repeated_reading_trial, -repeated, -subj) %>%
   mutate(corpus = ifelse(c1==1, "onestopre", "onestopno"), 
@@ -97,7 +97,7 @@ levels(meta$corpus)
 contrasts(meta$corpus)
 ```
 
-```{r}
+```{r eval=FALSE}
 priors_rt <- c(
   prior(normal(5.1, 0.1), class = Intercept),
   prior(normal(0, 0.1), class = b),
@@ -127,10 +127,6 @@ print("Done fitting models")
 
 ```{r}
 m.meta <- read_rds("../models/meta/meta_gaze_duration.rds")
-summary(m.meta)
-```
-
-```{r}
 fe_table <- fixef(m.meta, probs = c(0.025, 0.975)) %>%
   as.data.frame() %>%
   rownames_to_column("Predictor") %>%
